@@ -77,7 +77,7 @@ The OpenAI key is an Aspire parameter (`Parameters:openaiKey`, `AIConnection__Op
 | `CarvedRock.Data` | EF Core `LocalContext`, entities, `CarvedRockRepository`, migrations, `SeedData.json` |
 | `CarvedRock.Domain` | Business logic (`ProductLogic`, `CartLogic`, `OrderLogic`), FluentValidation validators, Riok.Mapperly `ProductMapper` |
 | `CarvedRock.Api` | Controllers, `ValidationExceptionHandler`, `EmailService`, Scalar/OpenAPI |
-| `CarvedRock.WebApp` | Razor Pages UI; talks to the API through typed `ProductService`/`CartService` HttpClients |
+| `CarvedRock.WebApp` | Razor Pages UI; talks to the API through typed `ProductService`/`CartService`/`OrderService` HttpClients. The user menu (`#userMenu`) links to My Orders (`/Orders`: all orders with status badges, cancel for `Placed` ones) and Sign Out |
 | `CarvedRock.Mcp` | MCP server — `CarvedRockTools` (anonymous, product reads), `CartTools`/`OrderTools` (any signed-in user: `add_to_cart`, `clear_cart`, `get_my_orders`, `get_order`, `cancel_order`) and `AdminTools` (admin: `delete_product`, `set_product_price`). The destructive tools (`delete_product`, `cancel_order`, `clear_cart`) take `confirm` (default false): without it they change nothing and return `confirmation_required`. `TokenForwarder` relays the caller's bearer token to the API |
 | `CarvedRock.Agent` | `POST /agent` (streams text) and `POST /agent/run` (non-streaming: tool calls, token usage, elapsed time, prompt version); OpenAI chat client wired to the MCP server's tools via an injectable `IMcpClientProvider`; prompts and their version ids live in `AgentPrompts` (bump `AdminVersion` when `CarvedRock.Mcp/AdminPrompt.cs` changes) |
 | `MailKit.Client` | Hand-rolled Aspire client integration (factory, settings, health check) |

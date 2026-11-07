@@ -187,6 +187,24 @@ text in retrieved content (Phase 5).
       unaffected. Update the `readme.md` admin walkthrough if it mentions
       deleting via chat.
 
+### 2g. My Orders page and user menu - DONE
+
+- [x] The "name + Sign Out" block in `_LoginPartial.cshtml` is now a user dropdown
+      (`#userMenu`) with **My Orders** and **Sign Out**.
+- [x] New `/Orders` Razor page (`OrdersModel`) backed by a typed `OrderService`
+      (`GET /order`, `POST /order/{id}/cancel`). It lists *all* of the user's orders,
+      newest first, with a status badge (Placed / Shipped / Cancelled).
+- [x] Only `Placed` orders get a "Cancel order" button, which opens a confirmation
+      modal (optional reason, "Yes, cancel order" / "Keep order"). 404/409/400 from the API
+      show as an error banner (e.g. "already shipped") instead of an error page.
+- [x] Playwright tests (`WebAppTests.Orders.cs`, bob): cancel from the menu flow with a
+      DB check, and cancelling an order that shipped after the page loaded (error banner,
+      refreshed row has no cancel button). They share bob's cart with
+      `CustomerCanAddRecommendedProductToCartViaChat`, so all three use
+      `[NotInParallel("bob-cart")]`.
+- [x] `Page.Login` now waits for `#userMenu` instead of the "Sign Out" link, which is
+      hidden inside the dropdown until opened.
+
 ### Phase 2 implementation notes (where it differs from the text above)
 
 - The API's `CustomizeProblemDetails` used to overwrite *every* `ProblemDetails.Detail`

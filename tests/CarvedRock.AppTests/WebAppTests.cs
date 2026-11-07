@@ -177,6 +177,7 @@ public partial class WebAppTests : CustomPageTest
 
     [Test]
     [RecordVideo]
+    [NotInParallel("bob-cart")] // shares bob's cart with the My Orders tests (WebAppTests.Orders.cs)
     // bob (admin), not alice - alice's cart is shared state across the DependsOn chain above;
     // bob's cart isn't touched by any other test, so this one needs no ordering.
     public async Task CustomerCanAddRecommendedProductToCartViaChat()
