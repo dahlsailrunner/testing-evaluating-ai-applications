@@ -128,8 +128,14 @@ the MCP server** (see below) -- it uses the `agent` API. It can:
 * `POST /agent/run` takes the same request but returns a single JSON result with the
   final text, every tool call (arguments and results), token usage, elapsed time and the
   prompt version that was used - handy for testing and evaluating the agent
-* The system prompts are versioned (`customer-3`, `admin-2`) so results can be tied to the
-  exact prompt that produced them
+* `POST /agent/describe` (admin only) is a generative feature with no tools or conversation:
+  give it a product name, category and a few key features and it drafts a catalog
+  description as structured output. The draft is checked against the product rules
+  (for example the 150 character limit) and comes back exactly as the model wrote it, with
+  `isValid` and any `violations` - it is never trimmed or fixed up. The response also has
+  token usage and elapsed time. There is no UI for it; use the Scalar page or an HTTP client.
+* The system prompts are versioned (`customer-3`, `admin-2`, `describe-1`) so results can be
+  tied to the exact prompt that produced them
 
 ### MCP
 
