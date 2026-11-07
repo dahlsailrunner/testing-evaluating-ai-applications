@@ -1,3 +1,4 @@
+using CarvedRock.Domain;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -19,10 +20,17 @@ public class ApiFactory : TestWebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.ConfigureTestServices(services => services
-               .AddAuthentication(TestAuthHandler.SchemeName)
-               .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>
-                                (TestAuthHandler.SchemeName, _ => { }));
+        builder.ConfigureTestServices(services =>
+        {
+            services.AddAuthentication(TestAuthHandler.SchemeName)
+                    .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>
+                                (TestAuthHandler.SchemeName, _ => { });
+
+            // no SMTP server in these tests - record emails instead of sending them
+            services.AddSingleton<RecordingOrderEmailSender>();
+            services.AddScoped<IOrderEmailSender>(sp =>
+                sp.GetRequiredService<RecordingOrderEmailSender>());
+        });
 
         _wireMockDadJokes = WireMockServer.Start();
 

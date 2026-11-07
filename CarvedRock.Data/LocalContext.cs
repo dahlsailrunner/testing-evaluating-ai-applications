@@ -28,6 +28,12 @@ public class LocalContext(DbContextOptions<LocalContext> options) : DbContext(op
         modelBuilder.Entity<Order>(entity =>
         {
             entity.HasIndex(o => o.UserId);
+            entity.Property(o => o.Status)
+                  .HasConversion<string>()
+                  .HasMaxLength(20)
+                  .HasDefaultValue(OrderStatus.Placed)
+                  .HasSentinel((OrderStatus)0); // 0 is never a real status; means "unset"
+            entity.Property(o => o.CancellationReason).HasMaxLength(200);
             entity.HasMany(o => o.Details)
                   .WithOne(d => d.Order)
                   .HasForeignKey(d => d.OrderId)

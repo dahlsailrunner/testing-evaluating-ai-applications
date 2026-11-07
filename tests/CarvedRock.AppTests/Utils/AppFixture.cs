@@ -29,6 +29,20 @@ public class AppFixture : AspireFixture<CarvedRock_AppHost>
                 p.Category == "kayak" ? f.Random.Double(100, 500) : 0)
         .RuleFor(p => p.ImgUrl, f => f.Image.PicsumUrl());
 
+    /// <summary>
+    /// A fresh context per call. <see cref="TestDbContext"/> is a single shared instance and a
+    /// DbContext isn't thread-safe, so tests that run in parallel (the browser tests do) must not
+    /// query it concurrently - use this instead and dispose the result.
+    /// </summary>
+    public async Task<LocalContext> CreateDbContextAsync()
+    {
+        var connStr = await App.GetConnectionStringAsync("CarvedRockPostgres");
+        var options = new DbContextOptionsBuilder<LocalContext>()
+                            .UseNpgsql(connStr)
+                            .Options;
+        return new LocalContext(options);
+    }
+
     public override async Task InitializeAsync()
     {
         await base.InitializeAsync(); // Build, start, wait for resources
@@ -76,7 +90,11 @@ public class AppFixture : AspireFixture<CarvedRock_AppHost>
         return await McpClient.CreateAsync(new HttpClientTransport(clientTransport));
     }
 
-    public async Task<McpClient> GetAdminMcpClient()
+    public Task<McpClient> GetAdminMcpClient() => GetMcpClientAsync("m2m.short"); // admin
+
+    public Task<McpClient> GetCustomerMcpClient() => GetMcpClientAsync("m2m"); // customer (not admin)
+
+    private async Task<McpClient> GetMcpClientAsync(string clientId)
     {
         var clientTransport = new HttpClientTransportOptions
         {
@@ -84,7 +102,7 @@ public class AppFixture : AspireFixture<CarvedRock_AppHost>
             TransportMode = HttpTransportMode.StreamableHttp,
             AdditionalHeaders = new Dictionary<string, string>()
         };
-        var accessToken = await GetClientCredsAccessTokenAsync("m2m.short",
+        var accessToken = await GetClientCredsAccessTokenAsync(clientId,
                                                 "secret");
 
         clientTransport.AdditionalHeaders.Add("Authorization", $"Bearer {accessToken}");

@@ -11,6 +11,49 @@ namespace CarvedRock.Api.Controllers;
 public class OrderController(IOrderLogic orderLogic,
                     ILogger<OrderController> logger) : ControllerBase
 {
+    [HttpGet]
+    public async Task<List<OrderModel>> GetMine() =>
+        await orderLogic.GetOrdersAsync(User.GetUserId());
+
+    // 404 for an order that doesn't exist *and* for one that belongs to someone else, so
+    // order ids can't be probed. Admins can see any order.
+    [HttpGet("{id:int}")]
+    [ProducesResponseType<OrderModel>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Get(int id)
+    {
+        var order = await orderLogic.GetOrderAsync(User.GetUserId(), User.IsInRole("admin"), id);
+        return order == null ? NotFound() : Ok(order);
+    }
+
+    [HttpPost("{id:int}/cancel")]
+    [ProducesResponseType<OrderModel>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Cancel(int id, [FromBody] CancelOrderModel? request)
+    {
+        var result = await orderLogic.CancelOrderAsync(User.GetUserId(),
+            User.IsInRole("admin"), id, request?.Reason);
+        return ToActionResult(result);
+    }
+
+    // Exists so shipped orders can be created (tests, demos). Deliberately admin-only and
+    // not exposed as an MCP tool, so an AI prompt can never reach it.
+    [HttpPost("{id:int}/ship")]
+    [Authorize(Roles = "admin")]
+    [ProducesResponseType<OrderModel>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Ship(int id) =>
+        ToActionResult(await orderLogic.MarkShippedAsync(id));
+
+    private IActionResult ToActionResult(OrderResult result) => result.Status switch
+    {
+        OrderResultStatus.Ok => Ok(result.Order),
+        OrderResultStatus.NotFound => NotFound(),
+        _ => Problem(detail: result.Message, statusCode: StatusCodes.Status409Conflict)
+    };
+
     [HttpPost]
     [ProducesResponseType<OrderModel>(StatusCodes.Status201Created)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]

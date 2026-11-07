@@ -101,6 +101,12 @@ static void SetupDevelopment(WebApplication app, Dictionary<string, string> oaut
 
 static void CustomizeProblemDetails(ProblemDetailsContext context)
 {
-    context.ProblemDetails.Detail = "Provide the instance value when contacting us for support";
+    // Server errors always get the generic message (don't leak internals). For other statuses
+    // keep a detail the endpoint set deliberately (e.g. "order has already shipped") so callers
+    // - including the MCP tools and the AI agent behind them - can see why a request was refused.
+    if (context.ProblemDetails.Status >= 500 || string.IsNullOrEmpty(context.ProblemDetails.Detail))
+    {
+        context.ProblemDetails.Detail = "Provide the instance value when contacting us for support";
+    }
     context.ProblemDetails.Instance = Activity.Current?.RootId;
 }

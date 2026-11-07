@@ -130,6 +130,19 @@ public class CarvedRockRepository(LocalContext ctx, ILogger<CarvedRockRepository
         return order;
     }
 
+    public async Task<Order?> GetOrderAsync(int id)
+    {
+        return await ctx.Orders
+            .Include(o => o.Details)
+            .SingleOrDefaultAsync(o => o.Id == id);
+    }
+
+    public async Task UpdateOrderAsync(Order order)
+    {
+        ctx.Orders.Update(order);
+        await ctx.SaveChangesAsync();
+    }
+
     public async Task<List<Order>> GetOrdersForUserAsync(string userId)
     {
         return await ctx.Orders.Where(o => o.UserId == userId)

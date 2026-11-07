@@ -126,6 +126,58 @@ public class McpTests(AppFixture fixture)
     }
 
     [Test]
+    // GetProductsAnonymous_ReturnsAllProducts compares the API's product count to the initial
+    // snapshot, so this test (which briefly adds a product) must not overlap with it.
+    [DependsOn(typeof(ProductApiTests), nameof(ProductApiTests.GetProductsAnonymous_ReturnsAllProducts))]
+    public async Task DeleteProductRequiresConfirmation()
+    {
+        // create a throwaway product so no shared seed data (or other test's ids) is touched
+        var api = await fixture.GetAdminApiClient();
+        var created = await api.PostAsJsonAsync("/product", new NewProduct(
+            $"Temp {Guid.NewGuid().ToString("N")[..8]}", "boots",
+            "Temporary product for the delete confirmation test.", 69.99, "https://some.img/cool.png"));
+        await Assert.That(created.StatusCode).IsEqualTo(System.Net.HttpStatusCode.Created);
+        var product = (await created.Content.ReadFromJsonAsync<Product>())!;
+
+        var mcpClient = await fixture.GetAdminMcpClient();
+
+        // without confirm: nothing is deleted, and the result names the product
+        var unconfirmed = await CallToolAsync<OperationResult>(mcpClient, "delete_product",
+            new Dictionary<string, object?> { { "id", product.Id } });
+        await Assert.That(unconfirmed.Status).IsEqualTo("confirmation_required");
+        await Assert.That(unconfirmed.Message).Contains(product.Name);
+        var stillThere = await api.GetAsync($"/product/{product.Id}");
+        await Assert.That(stillThere.StatusCode).IsEqualTo(System.Net.HttpStatusCode.OK);
+
+        // with confirm: it is deleted
+        var confirmed = await CallToolAsync<OperationResult>(mcpClient, "delete_product",
+            new Dictionary<string, object?> { { "id", product.Id }, { "confirm", true } });
+        await Assert.That(confirmed.Status).IsEqualTo("ok");
+        var gone = await api.GetAsync($"/product/{product.Id}");
+        await Assert.That(gone.StatusCode).IsEqualTo(System.Net.HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    public async Task DeleteUnknownProductIsAStructuredError()
+    {
+        var mcpClient = await fixture.GetAdminMcpClient();
+
+        var result = await CallToolAsync<OperationResult>(mcpClient, "delete_product",
+            new Dictionary<string, object?> { { "id", 987_654 }, { "confirm", true } });
+
+        await Assert.That(result.Status).IsEqualTo("error");
+        await Assert.That(result.Message).Contains("not found");
+    }
+
+    private async Task<T> CallToolAsync<T>(ModelContextProtocol.Client.McpClient client, string tool,
+        Dictionary<string, object?> args)
+    {
+        var response = await client.CallToolAsync(tool, args);
+        var text = (TextContentBlock)response.Content.First(c => c.Type == "text");
+        return JsonSerializer.Deserialize<T>(text.Text, CamelCaseOptions)!;
+    }
+
+    [Test]
     public async Task SetPriceToSameValueIsANoOp()
     {
         var mcpClient = await fixture.GetAdminMcpClient();

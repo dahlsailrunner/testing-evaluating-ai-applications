@@ -78,7 +78,7 @@ The OpenAI key is an Aspire parameter (`Parameters:openaiKey`, `AIConnection__Op
 | `CarvedRock.Domain` | Business logic (`ProductLogic`, `CartLogic`, `OrderLogic`), FluentValidation validators, Riok.Mapperly `ProductMapper` |
 | `CarvedRock.Api` | Controllers, `ValidationExceptionHandler`, `EmailService`, Scalar/OpenAPI |
 | `CarvedRock.WebApp` | Razor Pages UI; talks to the API through typed `ProductService`/`CartService` HttpClients |
-| `CarvedRock.Mcp` | MCP server — `CarvedRockTools` (anonymous) and `AdminTools` (`[Authorize]`), `TokenForwarder` relays the caller's bearer token to the API |
+| `CarvedRock.Mcp` | MCP server — `CarvedRockTools` (anonymous, product reads), `CartTools`/`OrderTools` (any signed-in user: `add_to_cart`, `clear_cart`, `get_my_orders`, `get_order`, `cancel_order`) and `AdminTools` (admin: `delete_product`, `set_product_price`). The destructive tools (`delete_product`, `cancel_order`, `clear_cart`) take `confirm` (default false): without it they change nothing and return `confirmation_required`. `TokenForwarder` relays the caller's bearer token to the API |
 | `CarvedRock.Agent` | `POST /agent` (streams text) and `POST /agent/run` (non-streaming: tool calls, token usage, elapsed time, prompt version); OpenAI chat client wired to the MCP server's tools via an injectable `IMcpClientProvider`; prompts and their version ids live in `AgentPrompts` (bump `AdminVersion` when `CarvedRock.Mcp/AdminPrompt.cs` changes) |
 | `MailKit.Client` | Hand-rolled Aspire client integration (factory, settings, health check) |
 | `CarvedRock.ServiceDefaults` | OpenTelemetry, health checks, service discovery, resilience |
@@ -109,15 +109,18 @@ They are separate projects **because top-level statements make `Program` ambiguo
 **`tests/CarvedRock.AppTests`** — full-stack, real containers (`TUnit.Aspire` + `TUnit.Playwright`).
 
 - `AppFixture : AspireFixture<CarvedRock_AppHost>` starts the whole AppHost (3-minute resource timeout), then opens a `LocalContext` against the real Postgres so tests can assert on the database directly. Endpoints come from `App.GetEndpoint(...)`/`App.CreateHttpClient(...)`.
-- Real access tokens are fetched from the Duende demo server via client credentials (`GetAdminApiClient`, `GetCustomerApiClient`, `GetAdminMcpClient`).
+- Real access tokens are fetched from the Duende demo server via client credentials (`GetAdminApiClient`, `GetCustomerApiClient`, `GetAdminMcpClient`, `GetCustomerMcpClient`).
 - `AppFixture.cs` re-declares `Product`/`NewProductModel` as local records **on purpose** — the tests assert against a documented contract rather than the app's own types.
 - `CustomPageTest : PageTest` is the Playwright base: `IgnoreHTTPSErrors` (Linux CI dev-certs), page-failure event capture, and `page.Login(user, pass)`.
 - `[RecordVideo]` is a custom attribute that flags a test via TUnit's `StateBag` (through `ITestDiscoveryEventReceiver`, so no reflection); `CustomPageTest` turns that into `RecordVideoDir` and renames the `.webm` files to test names at `[After(TestSession)]`. Artifacts land in `bin/<config>/net10.0/playwright-artifacts/`.
 
 ### Gotchas in AppTests
 
+- **Orders have a status** (`Placed`/`Shipped`/`Cancelled`). `POST /order/{id}/cancel` (owner or admin; 404 for someone else's order, 409 if shipped/cancelled) and the admin-only `POST /order/{id}/ship` exist; `ship` is deliberately not an MCP tool.
+- **Parallel browser tests must not share `AppFixture.TestDbContext`** (a `DbContext` is not thread-safe) - use `AppFixture.CreateDbContextAsync()`.
+- **Mail assertions:** M2M tokens have no email claim, so their orders all go to `unknown@carvedrock.com`, which `OrderTests` reads from MailPit. `OrderMcpTests` uses its own address for that reason; do the same in any new test that places orders as an M2M client.
 - **Shared mutable state.** These tests run against one live database and mutate it. `WebAppTests.AdminCanDeleteProductsViaChat` deletes products 20 and 23; the MCP test updates product 22 — and `OrderTests` explicitly filters those ids out. If you add a mutating test, check the exclusions in `OrderTests.PlacingOrderWorksCompletely` and update them.
-- **Global retry policy.** `[assembly: Retry(2, BackoffMs = 30_000)]` sits at the top of `AppFixture.cs` to survive transient failures at the external IdP's login page.
+- **Global retry policy.** `[assembly: Retry(2, BackoffMs = 30_000)]` sits at the top of `AppFixture.cs` to survive transient failures at the external IdP's login page. Retries are silent and the TUnit report only keeps the passing attempt, so a flaky test can look green: after a run, check `TestResults/*.tunit-report.json` for `"retryAttempt"` greater than 0, and to see the real failure temporarily set `Retry(0)`.
 - **Browser parallelism** is capped at 3 (`BrowserParallelLimit` + `[ParallelLimiter<BrowserParallelLimit>]` on `WebAppTests`) because each test is a Chromium instance on top of the whole Aspire app.
 - **Non-deterministic assertions.** Chat-driven tests assert on LLM output (e.g. `ToContainTextAsync("successfully")`) and need an OpenAI key; treat them as inherently softer assertions.
 

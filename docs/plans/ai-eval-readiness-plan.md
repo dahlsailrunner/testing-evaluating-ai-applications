@@ -86,56 +86,56 @@ Goal: make the agent measurable and substitutable without changing the
 - [ ] Not yet verified end to end: `/agent` streaming and `/agent/run` against
       a real model (needs an OpenAI key, `aspire run`).
 
-## Phase 2: Order lookup, cancellation, and multi-step workflows
+## Phase 2: Order lookup, cancellation, and multi-step workflows - DONE
 
 ### 2a. Data and domain
 
-- [ ] `Order` entity: add `Status` (`Placed`, `Shipped`, `Cancelled`; stored
+- [x] `Order` entity: add `Status` (`Placed`, `Shipped`, `Cancelled`; stored
       as a string), nullable `CancelledAt`, and nullable `CancellationReason`.
-- [ ] EF migration `AddOrderStatus` from `CarvedRock.Data`
+- [x] EF migration `AddOrderStatus` from `CarvedRock.Data`
       (`dotnet ef migrations add AddOrderStatus -s ../CarvedRock.Api`).
       Existing rows default to `Placed`. Keep `SeedData.json` untouched.
-- [ ] Repository: `GetOrderAsync(id)`, `UpdateOrderAsync(order)` (or targeted
+- [x] Repository: `GetOrderAsync(id)`, `UpdateOrderAsync(order)` (or targeted
       status updates). `GetOrdersForUserAsync` already exists.
-- [ ] `IOrderLogic`: `GetOrdersAsync(userId)`, `GetOrderAsync(userId, id)`,
+- [x] `IOrderLogic`: `GetOrdersAsync(userId)`, `GetOrderAsync(userId, id)`,
       `CancelOrderAsync(userId, isAdmin, id, reason)`, `MarkShippedAsync(id)`.
       Rules: owner or admin only; only `Placed` orders can be cancelled;
       cancelling is a status change (the row is kept for audit); shipping only
       applies to `Placed` orders.
-- [ ] `IOrderEmailSender.SendOrderCancellationAsync`, implemented in
+- [x] `IOrderEmailSender.SendOrderCancellationAsync`, implemented in
       `EmailService` (MailPit shows it in the inbox, like confirmations).
-- [ ] `OrderModel` gains `Status` (Core DTO); map it in `OrderLogic`.
+- [x] `OrderModel` gains `Status` (Core DTO); map it in `OrderLogic`.
 
 ### 2b. API (`OrderController`, all `[Authorize]`)
 
-- [ ] `GET /order` (current user's orders), `GET /order/{id}` (404 for another
+- [x] `GET /order` (current user's orders), `GET /order/{id}` (404 for another
       user's order unless admin).
-- [ ] `POST /order/{id}/cancel` with an optional `{ reason }` body: 200 with
+- [x] `POST /order/{id}/cancel` with an optional `{ reason }` body: 200 with
       the updated order, 404 not found / not yours, 409 shipped or already
       cancelled (`ProblemDetails`, matching existing style).
-- [ ] `POST /order/{id}/ship` (admin only, via `AdminClaimsTransformation`).
+- [x] `POST /order/{id}/ship` (admin only, via `AdminClaimsTransformation`).
       Exists so shipped orders can be created in tests and demos.
 
 ### 2c. MCP (`[Authorize]`, token forwarded by `TokenForwarder`)
 
-- [ ] `get_my_orders`, `get_order`,
+- [x] `get_my_orders`, `get_order`,
       `cancel_order(orderId, reason?, confirm = false)`,
       `clear_cart(confirm = false)`.
-- [ ] Both destructive tools follow the `confirm` pattern from 2f: without
+- [x] Both destructive tools follow the `confirm` pattern from 2f: without
       `confirm: true` they change nothing and return `confirmation_required`
       describing the effect (the order's lines and total, or the cart's
       contents). `cancel_order` checks ownership and status *before* asking, so
       a refusal (404/409) is never preceded by a pointless confirmation.
-- [ ] Both return the `OperationResult` shape and turn 404/409 into structured
+- [x] Both return the `OperationResult` shape and turn 404/409 into structured
       errors (`status: "error"` with a message the model can relay), instead of
       throwing.
-- [ ] Validate tool inputs (ids positive, `reason` length cap).
-- [ ] No MCP tool for `ship`; it stays API-only so a customer prompt can never
+- [x] Validate tool inputs (ids positive, `reason` length cap).
+- [x] No MCP tool for `ship`; it stays API-only so a customer prompt can never
       reach it.
 
 ### 2d. Prompt
 
-- [ ] Customer prompt: describe order lookup, require explicit confirmation
+- [x] Customer prompt: describe order lookup, require explicit confirmation
       (naming the order) before passing `confirm=true` to `cancel_order` or
       `clear_cart`, never in the same turn as the original request, cover
       "reorder my last order" (`get_my_orders` then `add_to_cart` per line),
@@ -143,15 +143,15 @@ Goal: make the agent measurable and substitutable without changing the
 
 ### 2e. Tests (no LLM)
 
-- [ ] Unit: `OrderLogic` cancel rules (owner, admin, not owner, shipped,
+- [x] Unit: `OrderLogic` cancel rules (owner, admin, not owner, shipped,
       already cancelled, not found), ship rules, email sender called once.
-- [ ] ApiTests: `GET /order`, cross-user 404, cancel happy path, 409 cases,
+- [x] ApiTests: `GET /order`, cross-user 404, cancel happy path, 409 cases,
       admin cancel of another user's order, non-admin `ship` is 403.
-- [ ] AppTests: one MCP test per new tool through the real server, including
+- [x] AppTests: one MCP test per new tool through the real server, including
       that `cancel_order` and `clear_cart` change nothing without `confirm`. Cancel
       tests mutate orders for the shared demo users, so place a fresh order
       inside the test rather than depending on existing ones.
-- [ ] Update the `OrderTests` product-id exclusions only if a new test mutates
+- [x] Update the `OrderTests` product-id exclusions only if a new test mutates
       products (CLAUDE.md gotcha).
 
 ### Why this is here (adversarial surface it creates)
@@ -164,28 +164,49 @@ text in retrieved content (Phase 5).
 
 ### 2f. `delete_product` confirmation (decided; was Q4)
 
-- [ ] `delete_product(id, confirm = false)`. Without `confirm: true` it
+- [x] `delete_product(id, confirm = false)`. Without `confirm: true` it
       deletes nothing and returns `OperationResult("confirmation_required",
       "<name> (id N, $price) will be permanently deleted. Ask the
       administrator to confirm, then call again with confirm=true.")`. It
       looks the product up first so the message names it; an unknown id
       returns a structured error.
-- [ ] Admin prompt: name every product to be deleted, ask for explicit
+- [x] Admin prompt: name every product to be deleted, ask for explicit
       confirmation, and never pass `confirm=true` in the same turn as the
       original request. One confirmation covers only the ids that were listed.
-- [ ] Why a parameter and not prompt-only: the server holds the guardrail, and
+- [x] Why a parameter and not prompt-only: the server holds the guardrail, and
       "did the model ask before passing `confirm=true`?" becomes observable in
       the tool calls.
-- [ ] AppTests: `WebAppTests.AdminCanDeleteProductsViaChat` becomes two turns
+- [x] AppTests: `WebAppTests.AdminCanDeleteProductsViaChat` becomes two turns
       (request, assert the confirmation prompt, reply "yes", assert deletion in
       the database). The chat already re-sends history, so a follow-up works.
       Still ids 20 and 23, so the `OrderTests` exclusions are unchanged.
-- [ ] AppTests (MCP): without `confirm` the product still exists; with
+- [x] AppTests (MCP): without `confirm` the product still exists; with
       `confirm` it is gone. Use a product id not used elsewhere and add it to
       the `OrderTests` exclusions (CLAUDE.md gotcha).
-- [ ] The API's `DELETE /product/{id}` is unchanged, so ApiTests are
+- [x] The API's `DELETE /product/{id}` is unchanged, so ApiTests are
       unaffected. Update the `readme.md` admin walkthrough if it mentions
       deleting via chat.
+
+### Phase 2 implementation notes (where it differs from the text above)
+
+- The API's `CustomizeProblemDetails` used to overwrite *every* `ProblemDetails.Detail`
+  with a generic support message, which hid the reason for a 409 (and the existing
+  empty-cart 400). It now only forces the generic text for 5xx (or when no detail was set).
+- Admin mode (`/admin` prefix) now lasts for the whole conversation: a destructive action
+  takes two turns and the confirmation reply has no prefix. See
+  `Agent.IsAdminModeRequested` (unit tested). Prompt versions bumped to `customer-2` and
+  `admin-2`.
+- The MCP delete-confirmation AppTest creates its own throwaway product, so no
+  `OrderTests` id exclusions changed. `AdminCanDeleteProductsViaChat` still uses 20 and 23.
+- API tests have no SMTP server, so `ApiFactory` swaps in `RecordingOrderEmailSender`.
+- AppTests: `OrderMcpTests` places orders as the admin M2M client (`m2m.short`) with its
+  own email address and runs serially; the customer M2M client (`m2m`) is used to prove it
+  cannot see or cancel those orders. Using the default address made `OrderTests` flaky
+  (it reads the newest message sent to that address from MailPit).
+- Browser tests run in parallel, so they must not share `AppFixture.TestDbContext`
+  (a `DbContext` is not thread-safe); use `AppFixture.CreateDbContextAsync()`.
+- Not yet verified by a person: the customer-facing chat flows for cancel, clear cart and
+  reorder (the tools are covered; the prompt's behavior is exactly what the course evaluates).
 
 ## Phase 3: Retrieval over policy and product knowledge
 

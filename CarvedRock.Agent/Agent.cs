@@ -58,7 +58,7 @@ public class Agent(IChatClient chatClient,
 
         var tools = await mcpClient.ListToolsAsync(cancellationToken: cxl);
 
-        var (prompt, promptVersion) = await GetPromptAsync(message, mcpClient,
+        var (prompt, promptVersion) = await GetPromptAsync(message, history, mcpClient,
             httpCtxAccessor.HttpContext?.User, cxl);
         Activity.Current?.SetTag("carvedrock.prompt.version", promptVersion);
 
@@ -80,11 +80,28 @@ public class Agent(IChatClient chatClient,
         return (agent, messages, promptVersion);
     }
 
-    private static async Task<(string Prompt, string Version)> GetPromptAsync(string message,
-                                    McpClient mcpClient, ClaimsPrincipal? user, CancellationToken cxl)
+    /// <summary>
+    /// Admin mode is entered by starting a message with <c>/admin</c> (admins only) and stays on for
+    /// the rest of the conversation: the history is checked too, because a destructive action takes
+    /// two turns (request, then confirmation) and the confirmation reply won't repeat the prefix.
+    /// </summary>
+    public static bool IsAdminModeRequested(string message, IEnumerable<ChatTurn>? history,
+                                            ClaimsPrincipal? user)
     {
-        if (message.StartsWith("/admin", StringComparison.InvariantCultureIgnoreCase) &&
-            (user?.IsInRole("admin") ?? false))
+        if (!(user?.IsInRole("admin") ?? false)) return false;
+
+        return StartsWithAdmin(message) ||
+               (history?.Any(t => t.Role.Equals("user", StringComparison.OrdinalIgnoreCase) &&
+                                  StartsWithAdmin(t.Content)) ?? false);
+
+        static bool StartsWithAdmin(string text) =>
+            text.StartsWith("/admin", StringComparison.InvariantCultureIgnoreCase);
+    }
+
+    private static async Task<(string Prompt, string Version)> GetPromptAsync(string message,
+        List<ChatTurn>? history, McpClient mcpClient, ClaimsPrincipal? user, CancellationToken cxl)
+    {
+        if (IsAdminModeRequested(message, history, user))
         {
             var prompt = await mcpClient.GetPromptAsync("admin_prompt", cancellationToken: cxl);
             var adminPrompt = new StringBuilder();

@@ -8,11 +8,11 @@ namespace CarvedRock.Agent;
 /// </summary>
 public static class AgentPrompts
 {
-    public const string CustomerVersion = "customer-1";
+    public const string CustomerVersion = "customer-2";
 
     // The admin prompt text lives in the MCP server (CarvedRock.Mcp/AdminPrompt.cs),
     // so its version is tracked here: bump AdminVersion when that prompt changes.
-    public const string AdminVersion = "admin-1";
+    public const string AdminVersion = "admin-2";
 
     public const string Customer =
         """
@@ -33,6 +33,24 @@ public static class AgentPrompts
         Before calling add_to_cart, always call get_products or get_single_product first - even if you
         already discussed the product earlier - and use the exact numeric "id" field from that tool's
         result. Never guess an id, and never use a product's position in a list as its id.
+        Signed-in customers can also ask about their orders and cart:
+        - To look up orders call get_my_orders (all of the user's orders) or get_order (one order by id).
+          Report each order's status accurately: Placed, Shipped or Cancelled.
+        - To cancel an order, first call cancel_order WITHOUT confirm. Nothing is cancelled; the tool describes
+          the order. Tell the user the order id, its items and its total, and ask them to confirm. Only after the
+          user explicitly agrees in a later message, call cancel_order again with confirm=true. Never set
+          confirm=true in the same turn as the user's original request, and never cancel an order the user
+          did not confirm.
+        - Only orders with status Placed can be cancelled. If an order has shipped, explain that politely and
+          suggest returning the items instead. If cancel_order reports an error, relay it to the user - do not
+          retry or try to work around it.
+        - To empty the cart, call clear_cart WITHOUT confirm, tell the user which items would be removed, and
+          wait for their explicit confirmation in a later message before calling clear_cart with confirm=true.
+          Clearing the cart is not the same as cancelling an order.
+        - To reorder a previous order, call get_my_orders, find the order the user means, then call add_to_cart
+          once per line item using that line's product id and quantity. The ids come from the order's lines, so
+          you do not need to look them up again for a reorder.
+        - You can only see and change the signed-in user's own orders and cart.
         If you can't help with a request, please say so politely.
         """;
 }
