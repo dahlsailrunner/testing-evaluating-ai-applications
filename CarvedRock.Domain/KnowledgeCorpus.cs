@@ -7,13 +7,20 @@ namespace CarvedRock.Domain;
 public static class KnowledgeCorpus
 {
     private const string ResourcePrefix = "Knowledge/";
+    private const string AdversarialResourcePrefix = "KnowledgeAdversarial/";
 
-    public static List<KnowledgeDocument> Load()
+    /// <param name="includeAdversarialContent">
+    /// Also load the poisoned documents (indirect prompt injection via retrieval). Default off.
+    /// </param>
+    public static List<KnowledgeDocument> Load(bool includeAdversarialContent = false)
     {
         var assembly = typeof(KnowledgeCorpus).Assembly;
 
         return assembly.GetManifestResourceNames()
-            .Where(n => n.StartsWith(ResourcePrefix, StringComparison.Ordinal) && n.EndsWith(".md"))
+            .Where(n => n.EndsWith(".md") &&
+                        (n.StartsWith(ResourcePrefix, StringComparison.Ordinal) ||
+                         (includeAdversarialContent &&
+                          n.StartsWith(AdversarialResourcePrefix, StringComparison.Ordinal))))
             .Order(StringComparer.Ordinal)
             .Select(name =>
             {

@@ -21,6 +21,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- adversarial test products (prompt-injection payloads); only seeded when explicitly enabled -->
+    <EmbeddedResource Include="AdversarialSeedData.json" LogicalName="AdversarialSeedData.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="SeedData.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

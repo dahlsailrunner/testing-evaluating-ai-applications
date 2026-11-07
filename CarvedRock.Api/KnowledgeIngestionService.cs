@@ -21,16 +21,16 @@ public class KnowledgeIngestionService(IServiceScopeFactory scopeFactory, IConfi
 
         using var scope = scopeFactory.CreateScope();
         await IngestSafelyAsync(scope.ServiceProvider.GetRequiredService<IKnowledgeLogic>(),
-            logger, stoppingToken);
+            config.GetValue<bool>("Seed:IncludeAdversarialContent"), logger, stoppingToken);
     }
 
     /// <returns>True if the knowledge base is now up to date.</returns>
-    public static async Task<bool> IngestSafelyAsync(IKnowledgeLogic knowledge, ILogger logger,
-        CancellationToken cancellationToken)
+    public static async Task<bool> IngestSafelyAsync(IKnowledgeLogic knowledge, bool includeAdversarialContent,
+        ILogger logger, CancellationToken cancellationToken)
     {
         try
         {
-            await knowledge.IngestAsync(KnowledgeCorpus.Load(), cancellationToken);
+            await knowledge.IngestAsync(KnowledgeCorpus.Load(includeAdversarialContent), cancellationToken);
             return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

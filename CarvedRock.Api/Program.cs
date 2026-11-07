@@ -96,7 +96,16 @@ static void SetupDevelopment(WebApplication app, Dictionary<string, string> oaut
 
     var services = scope.ServiceProvider;
     var context = services.GetRequiredService<LocalContext>();
-    context.MigrateAndCreateData();
+
+    // Off by default. When on, a product and a knowledge document carrying prompt-injection payloads
+    // are added for adversarial testing of the AI features (see the readme).
+    var includeAdversarial = app.Configuration.GetValue<bool>("Seed:IncludeAdversarialContent");
+    if (includeAdversarial)
+    {
+        app.Logger.LogWarning("Seed:IncludeAdversarialContent is ON: the data includes prompt-injection " +
+                              "test content. This is for adversarial testing only.");
+    }
+    context.MigrateAndCreateData(includeAdversarialContent: includeAdversarial);
 
     app.MapOpenApi();
     app.MapScalarApiReference(options => options
@@ -109,13 +118,14 @@ static void SetupDevelopment(WebApplication app, Dictionary<string, string> oaut
         }));
 
     app.MapPost("/internal/reset-data", async (LocalContext db, IKnowledgeLogic knowledge,
-        ILoggerFactory loggerFactory, CancellationToken cancellationToken) =>
+        IConfiguration config, ILoggerFactory loggerFactory, CancellationToken cancellationToken) =>
     {
-        db.MigrateAndCreateData();
+        var includeAdversarial = config.GetValue<bool>("Seed:IncludeAdversarialContent");
+        db.MigrateAndCreateData(includeAdversarialContent: includeAdversarial);
 
         // Resetting only reseeds products, but it's also the retry button for knowledge ingestion
         // (e.g. the OpenAI key was added after startup). Unchanged chunks are skipped, so it's cheap.
-        await KnowledgeIngestionService.IngestSafelyAsync(knowledge,
+        await KnowledgeIngestionService.IngestSafelyAsync(knowledge, includeAdversarial,
             loggerFactory.CreateLogger<KnowledgeIngestionService>(), cancellationToken);
         return Results.NoContent();
     });

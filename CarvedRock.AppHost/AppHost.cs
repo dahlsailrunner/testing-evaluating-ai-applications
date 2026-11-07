@@ -19,8 +19,19 @@ var openAiKeyParam = builder.AddParameter("openaiKey",
      "Agent API and knowledge search (which needs embeddings) will still work fine.",
                 enableMarkdown: true);
 
+// Off by default. When true the API also seeds a product and a knowledge document that carry
+// prompt-injection payloads, for adversarial testing of the AI features. Set it with:
+//   aspire secret set Parameters:includeAdversarialContent true
+var adversarialParam = builder.AddParameter("includeAdversarialContent",
+        value: builder.Configuration["Parameters:includeAdversarialContent"] ?? "false")
+    .WithDescription("Set to `true` to also seed prompt-injection test content (a product and a " +
+                     "help document) for adversarial testing of the AI features. Leave `false` " +
+                     "for normal use.",
+                enableMarkdown: true);
+
 var api = builder.AddProject<Projects.CarvedRock_Api>("api")
     .WithEnvironment("AIConnection__OpenAIKey", openAiKeyParam)
+    .WithEnvironment("Seed__IncludeAdversarialContent", adversarialParam)
     .WithUrlForEndpoint("https", url => url.DisplayText = "API Scalar")
     .WithHttpHealthCheck("/alive")
     .WithReference(db)

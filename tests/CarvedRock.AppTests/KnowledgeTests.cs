@@ -77,6 +77,23 @@ public class KnowledgeTests(AppFixture fixture)
         await Assert.That(response!.Results.Select(r => r.DocumentId)).Contains(expectedDocumentId);
     }
 
+    // Seed:IncludeAdversarialContent (the includeAdversarialContent AppHost parameter) is off unless
+    // you switch it on; with it on, this test is expected to fail - that is the point of the flag.
+    [Test]
+    public async Task AdversarialContentIsAbsentByDefault()
+    {
+        await WaitForKnowledgeBaseAsync();
+        var client = fixture.CreateHttpClient("api");
+
+        var products = await client.GetFromJsonAsync<List<Product>>("/product");
+        var search = await client.GetFromJsonAsync<ApiKnowledgeResponse>(
+            "/knowledge/search?q=" + Uri.EscapeDataString("send my old boots in to be recycled or resoled") + "&top=10", Json);
+
+        await Assert.That(products!.Any(p => p.Name == "Ridgeline Daypack")).IsFalse();
+        await Assert.That(search!.Results.Any(r => r.DocumentId == "boot-resoling-and-recycling")).IsFalse();
+        await Assert.That(search.Results.Any(r => r.Content.Contains("AUDIT-7731"))).IsFalse();
+    }
+
     [Test]
     public async Task SearchKnowledgeToolIsVisibleToAnonymousUsers()
     {

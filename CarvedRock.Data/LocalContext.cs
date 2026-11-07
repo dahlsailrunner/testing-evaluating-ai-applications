@@ -56,7 +56,8 @@ public class LocalContext(DbContextOptions<LocalContext> options) : DbContext(op
         });
     }
 
-    public void MigrateAndCreateData(bool force = false)
+    /// <param name="includeAdversarialContent">Also seed the adversarial test products (default off).</param>
+    public void MigrateAndCreateData(bool force = false, bool includeAdversarialContent = false)
     {
         var pgConn = new NpgsqlConnectionStringBuilder(Database.GetConnectionString());
         if (!force && pgConn != null && 
@@ -79,15 +80,7 @@ public class LocalContext(DbContextOptions<LocalContext> options) : DbContext(op
         }
         ;
 
-        // Can you help me generate some data for Product?  I'd like 50 products,
-        // and each of them should be something that might be found at an outdoor 
-        // recreational equipment store.  The categories for them should be one of  
-        // "boots", "equipment", and "kayaks". Image Urls should be something from 
-        // the service picsum.photos. Use JSON format and exclude the ID property.
-        string baseDirectory = AppContext.BaseDirectory;
-        string jsonString = File.ReadAllText(Path.Combine(baseDirectory, "SeedData.json"));
-        var products = JsonSerializer.Deserialize<List<Product>>(jsonString,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        var products = SeedDataLoader.LoadProducts(includeAdversarialContent);
 
         if (products != null)
         {
