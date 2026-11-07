@@ -70,7 +70,7 @@ public partial class WebAppTests : CustomPageTest
     // alice's cart is shared backend state across every test that logs in as her -
     // run only after CustomerCanPlaceOrderAndGetEmail has cleared it via checkout.
     [DependsOn(nameof(CustomerCanPlaceOrderAndGetEmail))]
-    public async Task CustomerCanCancelOrderFromCartPage()
+    public async Task CustomerCanClearCartFromCartPage()
     {
         await Page.GotoAsync(WebAppUrl);
         await Page.GetByRole(AriaRole.Link, new() { Name = "Footwear" }).ClickAsync();
@@ -84,7 +84,7 @@ public partial class WebAppTests : CustomPageTest
 
         await Expect(Page.Locator("tbody")).ToContainTextAsync("Desert Walker");
 
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Cancel Order / Clear Cart" })
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Clear Cart", Exact = true })
                     .ClickAsync();
 
         await Expect(Page.GetByText("GET A GRIP")).ToBeVisibleAsync(); // redirected home
@@ -92,8 +92,8 @@ public partial class WebAppTests : CustomPageTest
     }
 
     [Test]
-    [DependsOn(nameof(CustomerCanCancelOrderFromCartPage))]
-    public async Task CustomerCanCancelOrderFromCheckoutPage()
+    [DependsOn(nameof(CustomerCanClearCartFromCartPage))]
+    public async Task CustomerCanClearCartFromCheckoutPage()
     {
         await Page.GotoAsync(WebAppUrl);
         await Page.GetByRole(AriaRole.Link, new() { Name = "Footwear" }).ClickAsync();
@@ -109,7 +109,7 @@ public partial class WebAppTests : CustomPageTest
 
         await Expect(Page.Locator("tbody")).ToContainTextAsync("Desert Walker");
 
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Cancel Order / Clear Cart" })
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Clear Cart", Exact = true })
                     .ClickAsync();
 
         await Expect(Page.GetByText("GET A GRIP")).ToBeVisibleAsync(); // redirected home
@@ -169,7 +169,7 @@ public partial class WebAppTests : CustomPageTest
         // this AppHost's Postgres survives across separate test runs) - start from a known-empty
         // cart so the "Cart (1)" assertion below is reliable no matter how many times this ran before.
         await Page.GotoAsync(new Uri(new Uri(WebAppUrl), "Cart").ToString());
-        var clearCartButton = Page.GetByRole(AriaRole.Button, new() { Name = "Cancel Order / Clear Cart" });
+        var clearCartButton = Page.GetByRole(AriaRole.Button, new() { Name = "Clear Cart", Exact = true });
         if (await clearCartButton.IsVisibleAsync())
         {
             await clearCartButton.ClickAsync();
