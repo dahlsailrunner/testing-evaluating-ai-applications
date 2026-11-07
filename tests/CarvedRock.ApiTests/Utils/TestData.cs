@@ -1,6 +1,8 @@
 using Bogus;
 using CarvedRock.Core;
 using CarvedRock.Data;
+using CarvedRock.Domain;
+using Microsoft.Extensions.Logging.Abstractions;
 using CarvedRock.Domain.Mapping;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Configurations;
@@ -63,7 +65,7 @@ public class TestData : IAsyncInitializer, IAsyncDisposable
                             // likely due to a transient failure" - and because this
                             // initializer runs once per test session, that single blip
                             // fails every test in the project.
-                            .UseNpgsql(ConnectionString, npgsql => npgsql
+                            .UseCarvedRockNpgsql(ConnectionString, npgsql => npgsql
                                 .EnableRetryOnFailure(
                                     maxRetryCount: 5,
                                     maxRetryDelay: TimeSpan.FromSeconds(10),
@@ -89,6 +91,12 @@ public class TestData : IAsyncInitializer, IAsyncDisposable
         await context.SaveChangesAsync();
 
         InitialProducts = await context.Products.ToListAsync();
+
+        // Knowledge base: the real corpus, embedded with deterministic fake embeddings (no OpenAI
+        // call), stored in the real pgvector table. Done once here so tests only ever search.
+        var knowledge = new KnowledgeLogic(new KnowledgeRepository(context),
+            new HashingEmbeddingGenerator(), NullLogger<KnowledgeLogic>.Instance);
+        await knowledge.IngestAsync(KnowledgeCorpus.Load());
     }
 
     public async ValueTask DisposeAsync()
@@ -141,7 +149,7 @@ public class TestData : IAsyncInitializer, IAsyncDisposable
     }
 
     private static PostgreSqlContainer BuildContainer() =>
-        new PostgreSqlBuilder("postgres:18.3")
+        new PostgreSqlBuilder("pgvector/pgvector:0.8.7-pg18") // Postgres 18 + the pgvector extension
             // Replaces the module's default `pg_isready` probe, which runs *inside* the
             // container and so proves only that Postgres is up - never that the host
             // can reach it. The probe below is strictly stronger: it subsumes

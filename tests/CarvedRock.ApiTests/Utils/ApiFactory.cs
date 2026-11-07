@@ -2,6 +2,8 @@ using CarvedRock.Domain;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TUnit.AspNetCore;
@@ -26,6 +28,10 @@ public class ApiFactory : TestWebApplicationFactory<Program>
                     .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>
                                 (TestAuthHandler.SchemeName, _ => { });
 
+            // no OpenAI in these tests - deterministic embeddings instead (see TestData for ingestion)
+            services.RemoveAll<IEmbeddingGenerator<string, Embedding<float>>>();
+            services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>, HashingEmbeddingGenerator>();
+
             // no SMTP server in these tests - record emails instead of sending them
             services.AddSingleton<RecordingOrderEmailSender>();
             services.AddScoped<IOrderEmailSender>(sp =>
@@ -44,7 +50,10 @@ public class ApiFactory : TestWebApplicationFactory<Program>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                { "DadJokeUrl", _wireMockDadJokes.Url }
+                { "DadJokeUrl", _wireMockDadJokes.Url },
+                // TestData ingests the knowledge base once, up front; don't let every
+                // per-test host race to do it again at startup
+                { "Knowledge:IngestOnStartup", "false" }
             });
         });
     }

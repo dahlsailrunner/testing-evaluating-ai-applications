@@ -226,29 +226,66 @@ text in retrieved content (Phase 5).
 - Not yet verified by a person: the customer-facing chat flows for cancel, clear cart and
   reorder (the tools are covered; the prompt's behavior is exactly what the course evaluates).
 
-## Phase 3: Retrieval over policy and product knowledge
+## Phase 3: Retrieval over policy and product knowledge - DONE
 
-- [ ] Corpus: 10-12 short markdown documents (returns and exchanges, shipping,
+- [x] Corpus: 10-12 short markdown documents (returns and exchanges, shipping,
       warranty, boot fit/sizing, boot care, layering, sleeping-bag ratings,
       tent care, order changes and cancellation) matching the seeded
       categories. The cancellation policy text must match the real rules
       from Phase 2 (cancel until shipped, then return instead). Deliberately
       include one near-duplicate pair and a few topics the corpus does **not**
       cover (e.g. price matching), so abstention is demonstrable.
-- [ ] Ingest: chunk, embed via `IEmbeddingGenerator`, store (per Q1). Re-run
+- [x] Ingest: chunk, embed via `IEmbeddingGenerator`, store (per Q1). Re-run
       on `/internal/reset-data`. If no OpenAI key is configured the feature
       degrades with a clear message, like the chat does today.
-- [ ] API: `GET /knowledge/search?q=&top=` returning chunks with source id,
+- [x] API: `GET /knowledge/search?q=&top=` returning chunks with source id,
       title, score, and text. The tool returns this shape unchanged so
       downstream consumers can see exactly what was retrieved.
-- [ ] MCP: `search_knowledge(query, topK)` (anonymous, read-only). Cap `topK`.
-- [ ] Prompt update: answer policy questions only from retrieved text, cite the
+- [x] MCP: `search_knowledge(query, topK)` (anonymous, read-only). Cap `topK`.
+- [x] Prompt update: answer policy questions only from retrieved text, cite the
       source title, say so when nothing relevant is found.
-- [ ] AppHost: pgvector image for `db`; document it in CLAUDE.md.
-- [ ] Tests (no LLM): chunking unit tests; ApiTests for the endpoint using a
+- [x] AppHost: pgvector image for `db`; document it in CLAUDE.md.
+- [x] Tests (no LLM): chunking unit tests; ApiTests for the endpoint using a
       **deterministic fake `IEmbeddingGenerator`** and the Testcontainers DB
       (also needs the pgvector image). The fake proves plumbing, not
       semantic quality.
+
+### Phase 3 implementation notes (where it differs from the text above)
+
+- **Store:** pgvector in the existing Postgres (Q1). AppHost and the ApiTests container both use
+  `pgvector/pgvector:0.8.7-pg18`. Packages: `Pgvector.EntityFrameworkCore` 0.3.0 (Data),
+  `Microsoft.Extensions.AI.Abstractions` 10.11.0 (Domain), `Aspire.OpenAI`
+  13.6.4-preview.1.26523.11 (Api; **preview**, same as the Agent).
+- **`UseVector()` has to be on every `LocalContext`.** It can't go in `OnConfiguring` (Aspire
+  pools the context), so the API enables it in `AddNpgsqlDbContext` and hand-built contexts use
+  `UseCarvedRockNpgsql` (new, in `CarvedRock.Data`).
+- **Schema:** the app builds its schema with `EnsureCreated`, not migrations, so the
+  `AddKnowledgeChunks` migration (like `AddOrderStatus`) is a reference artifact; an existing
+  database won't get the new table.
+- **Embeddings:** `text-embedding-3-small` (config `AIConnection:EmbeddingModel`), requested at
+  exactly 1536 dimensions. The corpus is 12 markdown documents in `CarvedRock.Domain/Knowledge/`
+  (embedded resources), including an *archived* returns policy that contradicts the current one,
+  and deliberately nothing about price matching, loyalty programs or gift cards.
+- **Ingestion:** background service at startup (`Knowledge:IngestOnStartup`, default true),
+  unchanged chunks skipped by content hash, one transaction per run. `POST /internal/reset-data`
+  re-runs it (it doesn't wipe knowledge; it is the retry button if the key arrived late).
+- **Search:** `GET /knowledge/search?q=&top=` (anonymous, 400 on blank/overlong q, `top`
+  clamped 1-10, 503 when the embedding model fails). The MCP `search_knowledge` returns the
+  chunks as-is plus a `status` (`ok` / `unavailable` / `error`); there is no similarity
+  threshold on purpose - deciding whether a result answers the question is the model's job
+  (and what the course evaluates).
+- **Prompt:** `customer-3` tells the model to answer policy questions only from retrieved text,
+  name the document, prefer non-archived documents, and say so when nothing relevant comes back.
+- **Tests:** unit (chunker, corpus, ingestion/search logic with in-memory fakes), API tests
+  against real pgvector with the hashing fake generator, and AppTests against the real OpenAI
+  model through the full stack.
+- **Observed with the real agent (customer-3, anonymous caller, one run):** policy questions
+  call `search_knowledge` and answer from it; the kayak answer used the current 14-day policy,
+  not the archived one. Some imperfections remain - good material for the evaluation demos:
+  "price match" was refused without searching, "how do I cancel an order" asked for an order id
+  instead of explaining the policy (anonymous callers have no order tools), the sleeping bag
+  answer added a slightly extrapolated "10 to 20 degrees" and not every answer names its
+  source document.
 
 ## Phase 4: One generative (non-agentic) feature
 

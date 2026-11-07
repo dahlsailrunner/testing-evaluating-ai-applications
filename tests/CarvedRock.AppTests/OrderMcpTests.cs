@@ -57,7 +57,7 @@ public class OrderMcpTests(AppFixture fixture)
     private async Task<string> GetOrderStatusFromDatabaseAsync(int orderId)
     {
         var connStr = await fixture.App.GetConnectionStringAsync("CarvedRockPostgres");
-        var options = new DbContextOptionsBuilder<LocalContext>().UseNpgsql(connStr).Options;
+        var options = new DbContextOptionsBuilder<LocalContext>().UseCarvedRockNpgsql(connStr).Options;
         await using var context = new LocalContext(options);
 
         var status = await context.Orders.AsNoTracking()

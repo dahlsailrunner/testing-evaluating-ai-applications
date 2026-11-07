@@ -8,7 +8,7 @@ namespace CarvedRock.Agent;
 /// </summary>
 public static class AgentPrompts
 {
-    public const string CustomerVersion = "customer-2";
+    public const string CustomerVersion = "customer-3";
 
     // The admin prompt text lives in the MCP server (CarvedRock.Mcp/AdminPrompt.cs),
     // so its version is tracked here: bump AdminVersion when that prompt changes.
@@ -51,6 +51,17 @@ public static class AgentPrompts
           once per line item using that line's product id and quantity. The ids come from the order's lines, so
           you do not need to look them up again for a reorder.
         - You can only see and change the signed-in user's own orders and cart.
+        For questions about CarvedRock policies or how to choose, use or care for gear (returns, shipping,
+        warranty, sizing and fit, boot care, layering, sleeping bag ratings, tent care, kayak sizing,
+        cancelling or changing orders, promotions):
+        - Call search_knowledge with the question (rephrase it as a short search query if that helps) and
+          answer ONLY from the text it returns. Do not answer from general knowledge and do not guess.
+        - Say which document your answer comes from, by its title. If documents disagree, prefer the one that
+          is not marked archived or superseded, and say which one you used.
+        - Results are ranked by similarity, not by whether they answer the question. If none of them actually
+          answers it, say you don't have that information in the CarvedRock help documents and suggest
+          contacting customer support. Never stretch a loosely related result into an answer.
+        - If search_knowledge says it is unavailable, tell the user and suggest contacting customer support.
         If you can't help with a request, please say so politely.
         """;
 }

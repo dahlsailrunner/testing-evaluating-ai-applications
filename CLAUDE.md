@@ -60,7 +60,7 @@ Playwright browsers: `pwsh tests/CarvedRock.AppTests/bin/Debug/net10.0/playwrigh
 `CarvedRock.AppHost/AppHost.cs` is the single source of truth for the topology:
 
 ```
-db (Postgres 18) ──┐
+db (Postgres 18 + pgvector) ──┐
 smtp (MailPit) ────┴─> api ─> mcp ─> agent ─> webapp
                                         mcp-inspector ─> mcp
 ```
@@ -74,11 +74,11 @@ The OpenAI key is an Aspire parameter (`Parameters:openaiKey`, `AIConnection__Op
 | Project | Role |
 | --- | --- |
 | `CarvedRock.Core` | Shared DTOs (`ProductModel`, `CartModels`, `OrderModels`), `AdminClaimsTransformation`, `OpenApiHelper` |
-| `CarvedRock.Data` | EF Core `LocalContext`, entities, `CarvedRockRepository`, migrations, `SeedData.json` |
-| `CarvedRock.Domain` | Business logic (`ProductLogic`, `CartLogic`, `OrderLogic`), FluentValidation validators, Riok.Mapperly `ProductMapper` |
-| `CarvedRock.Api` | Controllers, `ValidationExceptionHandler`, `EmailService`, Scalar/OpenAPI |
+| `CarvedRock.Data` | EF Core `LocalContext`, entities, `CarvedRockRepository`, migrations, `SeedData.json`. Also the knowledge base table (`KnowledgeChunk`, a pgvector `vector(1536)` column) and `KnowledgeRepository` (cosine-distance search). Build hand-made contexts with `UseCarvedRockNpgsql(...)`, never plain `UseNpgsql` - without `UseVector()` EF cannot build the model |
+| `CarvedRock.Domain` | Business logic (`ProductLogic`, `CartLogic`, `OrderLogic`), FluentValidation validators, Riok.Mapperly `ProductMapper`. Knowledge base: the help documents are markdown files in `Knowledge/` (embedded resources); `KnowledgeChunker` splits them by `##` section, `KnowledgeLogic` embeds them (skipping unchanged chunks by hash) and searches via `IEmbeddingGenerator` |
+| `CarvedRock.Api` | Controllers, `ValidationExceptionHandler`, `EmailService`, Scalar/OpenAPI. `GET /knowledge/search?q=&top=` (anonymous) searches the help documents; `KnowledgeIngestionService` embeds them in the background at startup (needs the OpenAI key; without it search answers 503 and everything else works). `POST /internal/reset-data` re-runs ingestion |
 | `CarvedRock.WebApp` | Razor Pages UI; talks to the API through typed `ProductService`/`CartService`/`OrderService` HttpClients. The user menu (`#userMenu`) links to My Orders (`/Orders`: all orders with status badges, cancel for `Placed` ones) and Sign Out |
-| `CarvedRock.Mcp` | MCP server — `CarvedRockTools` (anonymous, product reads), `CartTools`/`OrderTools` (any signed-in user: `add_to_cart`, `clear_cart`, `get_my_orders`, `get_order`, `cancel_order`) and `AdminTools` (admin: `delete_product`, `set_product_price`). The destructive tools (`delete_product`, `cancel_order`, `clear_cart`) take `confirm` (default false): without it they change nothing and return `confirmation_required`. `TokenForwarder` relays the caller's bearer token to the API |
+| `CarvedRock.Mcp` | MCP server — `CarvedRockTools` (anonymous, product reads), `KnowledgeTools` (anonymous: `search_knowledge` over the help documents), `CartTools`/`OrderTools` (any signed-in user: `add_to_cart`, `clear_cart`, `get_my_orders`, `get_order`, `cancel_order`) and `AdminTools` (admin: `delete_product`, `set_product_price`). The destructive tools (`delete_product`, `cancel_order`, `clear_cart`) take `confirm` (default false): without it they change nothing and return `confirmation_required`. `TokenForwarder` relays the caller's bearer token to the API |
 | `CarvedRock.Agent` | `POST /agent` (streams text) and `POST /agent/run` (non-streaming: tool calls, token usage, elapsed time, prompt version); OpenAI chat client wired to the MCP server's tools via an injectable `IMcpClientProvider`; prompts and their version ids live in `AgentPrompts` (bump `AdminVersion` when `CarvedRock.Mcp/AdminPrompt.cs` changes) |
 | `MailKit.Client` | Hand-rolled Aspire client integration (factory, settings, health check) |
 | `CarvedRock.ServiceDefaults` | OpenTelemetry, health checks, service discovery, resilience |
@@ -102,7 +102,8 @@ They are separate projects **because top-level statements make `Program` ambiguo
 **`tests/CarvedRock.ApiTests`** — in-process API testing (`TUnit.AspNetCore`).
 
 - `ApiFactory : TestWebApplicationFactory<Program>` + `ApiTestsBase : WebApplicationTest<ApiFactory, Program>`; tests get `Factory.CreateClient()` and `TestData`.
-- **Testcontainers** Postgres in `TestData` (an `IAsyncInitializer` shared per test session) seeded with 100 Bogus products using a **fixed seed (2001)** so data is reproducible. The connection string is injected via `ConfigureStartupConfiguration`.
+- **Testcontainers** Postgres (the `pgvector/pgvector` image, same as the AppHost) in `TestData` (an `IAsyncInitializer` shared per test session) seeded with 100 Bogus products using a **fixed seed (2001)** so data is reproducible. The connection string is injected via `ConfigureStartupConfiguration`.
+- **Knowledge base:** `TestData` ingests the real corpus once with `HashingEmbeddingGenerator` (deterministic hashed bag-of-words vectors, no OpenAI call), and `ApiFactory` swaps the same generator in for the API. It proves the plumbing against real pgvector; it says nothing about semantic quality. `KnowledgeApiTests` covers ranking, limits and validation.
 - **WireMock** replaces the external dad-joke API by overriding the `DadJokeUrl` config value.
 - `TestAuthHandler` is a fake auth scheme: the user comes from the `X-Authorization` header and every `X-Test-<claim>` header becomes a claim. Use the `AddAdminAuthHeaders()` / `AddCustomerAuthHeaders()` extensions.
 
@@ -116,6 +117,8 @@ They are separate projects **because top-level statements make `Program` ambiguo
 
 ### Gotchas in AppTests
 
+- **Schema comes from `EnsureCreated`, not from the migrations.** `LocalContext.MigrateAndCreateData` calls `Database.EnsureCreated()`, so the `Migrations/` folder is a reference/teaching artifact. A database that already has tables will NOT pick up new tables or columns (e.g. order status, knowledge chunks) - recreate it. The AppHost's Postgres has no volume, so `aspire run` always starts fresh.
+- **Knowledge tests need an OpenAI key** (`KnowledgeTests` uses the real embedding model); they wait up to 2 minutes for the API's background ingestion.
 - **Orders have a status** (`Placed`/`Shipped`/`Cancelled`). `POST /order/{id}/cancel` (owner or admin; 404 for someone else's order, 409 if shipped/cancelled) and the admin-only `POST /order/{id}/ship` exist; `ship` is deliberately not an MCP tool.
 - **Parallel browser tests must not share `AppFixture.TestDbContext`** (a `DbContext` is not thread-safe) - use `AppFixture.CreateDbContextAsync()`.
 - **Mail assertions:** M2M tokens have no email claim, so their orders all go to `unknown@carvedrock.com`, which `OrderTests` reads from MailPit. `OrderMcpTests` uses its own address for that reason; do the same in any new test that places orders as an M2M client.

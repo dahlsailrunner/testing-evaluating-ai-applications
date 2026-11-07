@@ -38,7 +38,7 @@ public class AppFixture : AspireFixture<CarvedRock_AppHost>
     {
         var connStr = await App.GetConnectionStringAsync("CarvedRockPostgres");
         var options = new DbContextOptionsBuilder<LocalContext>()
-                            .UseNpgsql(connStr)
+                            .UseCarvedRockNpgsql(connStr)
                             .Options;
         return new LocalContext(options);
     }
@@ -52,7 +52,7 @@ public class AppFixture : AspireFixture<CarvedRock_AppHost>
         var connStr = await App.GetConnectionStringAsync("CarvedRockPostgres");
 
         var options = new DbContextOptionsBuilder<LocalContext>()
-                            .UseNpgsql(connStr)
+                            .UseCarvedRockNpgsql(connStr)
                             .Options;
         TestDbContext = new LocalContext(options);
 

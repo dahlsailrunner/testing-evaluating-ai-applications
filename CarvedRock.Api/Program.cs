@@ -4,6 +4,8 @@ using CarvedRock.Data;
 using CarvedRock.Domain;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.EntityFrameworkCore;
+using Pgvector.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using System.Diagnostics;
@@ -52,9 +54,23 @@ builder.Services.AddScoped<IOrderLogic, OrderLogic>();
 builder.AddMailKitClient("smtp");
 builder.Services.AddScoped<IOrderEmailSender, EmailService>();
 
-builder.AddNpgsqlDbContext<LocalContext>("CarvedRockPostgres");
+builder.AddNpgsqlDbContext<LocalContext>("CarvedRockPostgres",
+    configureDbContextOptions: options => options.UseNpgsql(npgsql => npgsql.UseVector())); // pgvector (see UseCarvedRockNpgsql)
 
 builder.Services.AddScoped<ICarvedRockRepository, CarvedRockRepository>();
+
+// Knowledge base search: embeddings come from OpenAI (same key as the agent), vectors live in
+// Postgres via pgvector. Without a key everything else still works; search answers 503.
+builder.AddOpenAIClient("kyt-OpenAI", configureSettings: settings =>
+{
+    settings.EnableSensitiveTelemetryData = true;
+    settings.Key = builder.Configuration.GetValue<string>("AIConnection:OpenAIKey");
+}).AddEmbeddingGenerator(
+    builder.Configuration.GetValue<string>("AIConnection:EmbeddingModel") ?? "text-embedding-3-small");
+
+builder.Services.AddScoped<IKnowledgeRepository, KnowledgeRepository>();
+builder.Services.AddScoped<IKnowledgeLogic, KnowledgeLogic>();
+builder.Services.AddHostedService<KnowledgeIngestionService>();
 
 var app = builder.Build();
 
@@ -92,9 +108,15 @@ static void SetupDevelopment(WebApplication app, Dictionary<string, string> oaut
             flow.SelectedScopes = [.. oauthScopes.Keys];
         }));
 
-    app.MapPost("/internal/reset-data", (LocalContext db) =>
+    app.MapPost("/internal/reset-data", async (LocalContext db, IKnowledgeLogic knowledge,
+        ILoggerFactory loggerFactory, CancellationToken cancellationToken) =>
     {
         db.MigrateAndCreateData();
+
+        // Resetting only reseeds products, but it's also the retry button for knowledge ingestion
+        // (e.g. the OpenAI key was added after startup). Unchanged chunks are skipped, so it's cheap.
+        await KnowledgeIngestionService.IngestSafelyAsync(knowledge,
+            loggerFactory.CreateLogger<KnowledgeIngestionService>(), cancellationToken);
         return Results.NoContent();
     });
 }
