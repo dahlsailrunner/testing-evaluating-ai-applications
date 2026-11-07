@@ -1,0 +1,26 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.6.4">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+	<AspireUseCliBundle>true</AspireUseCliBundle>
+    <UserSecretsId>f7826f9b-9e1f-4f9e-aa49-476b653d8dd8</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CarvedRock.Agent\CarvedRock.Agent.csproj" />
+    <ProjectReference Include="..\CarvedRock.Api\CarvedRock.Api.csproj" />
+    <ProjectReference Include="..\CarvedRock.Mcp\CarvedRock.Mcp.csproj" />
+    <ProjectReference Include="..\CarvedRock.WebApp\CarvedRock.WebApp.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- <PackageReference Include="Aspire.Hosting.Kubernetes" Version="13.5.3-preview.1.26425.3" /> -->
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.6.4" />
+    <PackageReference Include="CommunityToolkit.Aspire.Hosting.MailPit" Version="13.6.1" />
+    <PackageReference Include="CommunityToolkit.Aspire.Hosting.McpInspector" Version="13.6.1" />
+  </ItemGroup>
+
+</Project>

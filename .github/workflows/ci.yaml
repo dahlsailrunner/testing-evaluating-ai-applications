@@ -1,0 +1,84 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.x
+
+      - name: Build & Install
+        run: dotnet build --configuration Release
+
+      - name: Ensure browsers are installed
+        run: pwsh tests/CarvedRock.AppTests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+
+      - name: Clear any existing dev certs
+        run: dotnet dev-certs https --clean
+
+      - name: Export SSL_CERT_DIR for OpenSSL trust
+        run: echo "SSL_CERT_DIR=$HOME/.aspnet/dev-certs/trust:/usr/lib/ssl/certs" >> "$GITHUB_ENV"
+
+      - name: Create and trust https certificate
+        run: dotnet dev-certs https --trust
+
+      - name: Run tests with coverage
+        env:
+          Parameters__openaiKey: ${{ secrets.OPENAI_KEY }}
+        run: |
+          dotnet test \
+            --configuration Release \
+            --no-build \
+            --results-directory ./TestResults \
+            -- \
+            --coverage \
+            --coverage-output-format cobertura \
+            --coverage-settings testconfig.json \
+            --report-trx
+
+      - name: ReportGenerator
+        if: always() # Run even if tests fail
+        uses: danielpalme/ReportGenerator-GitHub-Action@5.5.11
+        with:
+          reports: "./TestResults/*.cobertura.xml" # REQUIRED # The coverage reports that should be parsed (separated by semicolon). Globbing is supported.
+          targetdir: "coveragereport" # REQUIRED # The directory where the generated report should be saved.
+          reporttypes: "MarkdownSummaryGithub,Html" # The output formats and scope (separated by semicolon) Values: Badges, Clover, Cobertura, OpenCover, CsvSummary, Html, Html_Dark, Html_Light, Html_BlueRed, HtmlChart, HtmlInline, HtmlInline_AzurePipelines, HtmlInline_AzurePipelines_Dark, HtmlInline_AzurePipelines_Light, HtmlSummary, Html_BlueRed_Summary, JsonSummary, CodeClimate, Latex, LatexSummary, lcov, Markdown, MarkdownSummary, MarkdownAssembliesSummary, MarkdownSummaryGithub, MarkdownDeltaSummary, MHtml, SvgChart, SonarQube, TeamCitySummary, TextSummary, TextDeltaSummary, Xml, XmlSummary, cjson
+          tag: "${{ github.run_number }}_${{ github.run_id }}" # Optional tag or build version.
+          toolpath: "reportgeneratortool" # Default directory for installing the dotnet tool.
+
+      - name: Stage combined artifacts
+        if: always()
+        run: |
+          mkdir -p combined-report/coverage combined-report/merged-report combined-report/playwright
+          cp -r coveragereport/. combined-report/coverage/ 2>/dev/null || true
+          cp -r ${{ runner.temp }}/tunit-aggregate/**/merged-report.html combined-report/merged-report/ 2>/dev/null || true
+          cp -r ./tests/CarvedRock.AppTests/bin/Release/net10.0/playwright-artifacts/. combined-report/playwright/ 2>/dev/null || true
+
+      - name: Upload combined test artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-artifacts
+          path: combined-report
+
+      - name: Add comment to PR # Only applicable if 'MarkdownSummaryGithub' or one of the other Markdown report types is generated
+        if: github.event_name == 'pull_request'
+        run: gh pr comment $PR_NUMBER --edit-last --create-if-none --body-file coveragereport/SummaryGithub.md # Adjust path and filename if necessary
+        env:
+          PR_NUMBER: ${{ github.event.number }}
+
+      - name: Publish coverage in build summary # Only applicable if 'MarkdownSummaryGithub' or one of the other Markdown report types is generated
+        run: cat coveragereport/SummaryGithub.md >> $GITHUB_STEP_SUMMARY # Adjust path and filename if necessary
+

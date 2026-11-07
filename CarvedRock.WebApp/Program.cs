@@ -1,0 +1,69 @@
+using CarvedRock.Core;
+using CarvedRock.WebApp;
+using Duende.AccessTokenManagement.OpenIdConnect;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.AddServiceDefaults();
+
+var authority = builder.Configuration.GetValue<string>("Auth:Authority");
+
+JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultScheme = "Cookies";
+    options.DefaultChallengeScheme = "oidc";
+})
+.AddCookie("Cookies", options => options.AccessDeniedPath = "/AccessDenied")
+.AddOpenIdConnect("oidc", options =>
+{
+    options.Authority = authority;
+    options.ClientId = "interactive.confidential";
+    options.ClientSecret = "secret";
+    options.ResponseType = "code";
+    options.Scope.Add("openid");
+    options.Scope.Add("profile");
+    options.Scope.Add("email");
+    options.Scope.Add("api");
+    options.Scope.Add("offline_access");
+    options.GetClaimsFromUserInfoEndpoint = true;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        NameClaimType = "email"
+    };
+    options.SaveTokens = true;
+});
+
+builder.Services.AddSingleton<CarvedRockMetrics>();
+
+builder.Services.AddTransient<IClaimsTransformation, AdminClaimsTransformation>();
+builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddRazorPages();
+builder.Services.AddAntiforgery(options => options.HeaderName = "X-CSRF-TOKEN"); // fetch-based chat POST sends the token via this header instead of a form field
+builder.Services.AddHttpClient();
+builder.Services.AddHttpClient<IProductService, ProductService>();
+builder.Services.AddHttpClient<ICartService, CartService>();
+
+builder.Services.AddOpenIdConnectAccessTokenManagement();
+builder.Services.AddUserAccessTokenHttpClient("AI",
+       configureClient: client => client.BaseAddress = new("https://agent"));
+
+var app = builder.Build();
+
+app.MapDefaultEndpoints();
+
+app.UseExceptionHandler("/Error");
+
+app.UseStaticFiles();
+
+app.UseRouting();
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapRazorPages().RequireAuthorization();
+
+app.Run();

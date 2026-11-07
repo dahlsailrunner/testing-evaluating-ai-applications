@@ -1,0 +1,106 @@
+using CarvedRock.Api;
+using CarvedRock.Core;
+using CarvedRock.Data;
+using CarvedRock.Domain;
+using FluentValidation;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.IdentityModel.Tokens;
+using Scalar.AspNetCore;
+using System.Diagnostics;
+using System.IdentityModel.Tokens.Jwt;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.AddServiceDefaults();
+
+builder.Services.AddValidatorsFromAssemblyContaining<NewProductValidator>();
+builder.Services.AddProblemDetails(opts => opts.CustomizeProblemDetails = CustomizeProblemDetails);
+builder.Services.AddExceptionHandler<ValidationExceptionHandler>();
+
+JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
+builder.Services.AddAuthentication("Bearer")
+    .AddJwtBearer("Bearer", options =>
+    {
+        options.Authority = builder.Configuration.GetValue<string>("Auth:Authority"); ;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            NameClaimType = "email",
+            ValidateAudience = false
+        };
+    });
+builder.Services.AddTransient<IClaimsTransformation, AdminClaimsTransformation>();
+
+builder.Services.AddControllers();
+
+var oauthScopes = new Dictionary<string, string>
+{
+    { "api", "Resource access: Carved Rock API" },
+    { "openid", "OpenID information" },
+    { "profile", "User profile information" },
+    { "email", "User email address" }
+};
+
+builder.Services.AddOpenApiWithAuth(builder.Configuration.GetValue<string>("Auth:Authority")!,
+    oauthScopes);
+
+builder.Services.AddScoped<IProductLogic, ProductLogic>();
+builder.Services.AddScoped<ICartLogic, CartLogic>();
+builder.Services.AddScoped<IOrderLogic, OrderLogic>();
+
+// Order-confirmation email now lives in the API (moved out of the web app).
+// https://aspire.dev/integrations/custom-integrations/client-integrations/
+builder.AddMailKitClient("smtp");
+builder.Services.AddScoped<IOrderEmailSender, EmailService>();
+
+builder.AddNpgsqlDbContext<LocalContext>("CarvedRockPostgres");
+
+builder.Services.AddScoped<ICarvedRockRepository, CarvedRockRepository>();
+
+var app = builder.Build();
+
+app.MapDefaultEndpoints();
+
+app.UseExceptionHandler();
+
+if (app.Environment.IsDevelopment())
+{
+    SetupDevelopment(app, oauthScopes);
+}
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapControllers().RequireAuthorization();
+
+app.Run();
+
+static void SetupDevelopment(WebApplication app, Dictionary<string, string> oauthScopes)
+{
+    using var scope = app.Services.CreateScope();
+
+    var services = scope.ServiceProvider;
+    var context = services.GetRequiredService<LocalContext>();
+    context.MigrateAndCreateData();
+
+    app.MapOpenApi();
+    app.MapScalarApiReference(options => options
+        .AddPreferredSecuritySchemes("oauth2")
+        .AddAuthorizationCodeFlow("oauth2", flow =>
+        {
+            flow.ClientId = "interactive.public";
+            flow.Pkce = Pkce.Sha256;
+            flow.SelectedScopes = [.. oauthScopes.Keys];
+        }));
+
+    app.MapPost("/internal/reset-data", (LocalContext db) =>
+    {
+        db.MigrateAndCreateData();
+        return Results.NoContent();
+    });
+}
+
+static void CustomizeProblemDetails(ProblemDetailsContext context)
+{
+    context.ProblemDetails.Detail = "Provide the instance value when contacting us for support";
+    context.ProblemDetails.Instance = Activity.Current?.RootId;
+}

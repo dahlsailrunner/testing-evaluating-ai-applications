@@ -1,0 +1,23 @@
+{
+  "Configuration": {
+    "CodeCoverage": {
+      "SkipAutoProperties": true,
+      "Functions": {
+        "Exclude": [
+          "^Microsoft\\..*",
+          "^System\\..*",
+          "^CarvedRock\\.Data\\.Migrations\\..*"
+        ]
+      },
+      "Sources": {
+        "Exclude": [
+          ".*\\\\Riok.Mapperly\\\\.*",
+          ".*\\\\.*Models.*",
+          ".*\\\\.*Model.*",
+          ".*\\\\.*Entities.*",
+          ".*\\\\MailKit.Client\\\\.*"
+        ]
+      }
+    }
+  }
+}

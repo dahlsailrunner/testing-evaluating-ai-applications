@@ -1,0 +1,102 @@
+using CarvedRock.Core;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.RazorPages;
+using System.Text;
+
+namespace CarvedRock.WebApp.Pages;
+
+public partial class ListingModel(IProductService productService,
+    ICartService cartService,
+    CarvedRockMetrics metrics,
+    IHttpClientFactory httpClientFactory,
+    IAntiforgery antiforgery) : PageModel
+{
+    public List<ProductModel> Products { get; set; } = [];
+    public string CategoryName { get; set; } = "";
+    public string Category { get; set; } = "";
+    public string AntiforgeryToken { get; set; } = "";
+
+    public async Task OnGetAsync()
+    {
+        var cat = Request.Query["cat"].ToString();
+        if (string.IsNullOrEmpty(cat))
+            throw new Exception("failed");
+
+        Category = cat;
+        Products = await productService.GetProductsAsync(cat);
+        if (Products.Count != 0)
+        {
+            CategoryName = Products.First().Category[..1].ToUpper() +
+                           Products.First().Category[1..];
+        }
+
+        // exposed to the chat JS so its JSON POST can carry the token via the X-CSRF-TOKEN header
+        AntiforgeryToken = antiforgery.GetAndStoreTokens(HttpContext).RequestToken!;
+
+        metrics.ListingPageWasViewed();
+    }
+
+    public async Task<IActionResult> OnPostAddToCart(int productId, string cat)
+    {
+        await cartService.AddToCartAsync(productId);
+        return RedirectToPage("Listing", new { cat });
+    }
+
+    public async Task<IActionResult> OnPostChat([FromBody] ChatRequest request, CancellationToken cxl)
+    {
+        Response.Headers.Append("Content-Type", "text/event-stream");
+        Response.Headers.Append("Cache-Control", "no-cache");
+        HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?.DisableBuffering();
+
+        HttpClient client;
+        if (User?.Identity?.IsAuthenticated ?? false)
+        {
+            // must be authenticated
+            client = httpClientFactory.CreateClient("AI"); // uses access token management
+        }
+        else // anonymous
+        {
+            client = httpClientFactory.CreateClient();
+            client.BaseAddress = new("https://agent");
+        }
+
+        var agentRequest = new HttpRequestMessage(HttpMethod.Post, "Agent")
+        {
+            Content = JsonContent.Create(new
+            {
+                message = request.Message ?? string.Empty,
+                history = request.History
+            })
+        };
+
+        var apiResponse = await client.SendAsync(agentRequest, HttpCompletionOption.ResponseHeadersRead, cxl);
+        apiResponse.EnsureSuccessStatusCode();
+
+        await using var stream = await apiResponse.Content.ReadAsStreamAsync(cxl);
+        var buffer = new byte[4096];
+        var decoder = Encoding.UTF8;
+        int read;
+        while ((read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cxl)) > 0 &&
+            !cxl.IsCancellationRequested)
+        {
+            var chunk = decoder.GetString(buffer, 0, read);
+            // Split into smaller SSE frames if desired; here we send as-is
+            await Response.WriteAsync($"data: {chunk}\n\n", cxl);
+            await Response.Body.FlushAsync(cxl);
+        }
+
+        await Response.WriteAsync("event: end\ndata: done\n\n", cxl);
+        await Response.Body.FlushAsync(cxl);
+        return new EmptyResult();
+    }
+
+    public async Task<IActionResult> OnGetCartCount()
+    {
+        var count = await cartService.GetCartItemCountAsync();
+        return new JsonResult(new { count });
+    }
+}
+
+public record ChatTurnModel(string Role, string Content);
+public record ChatRequest(string? Message, List<ChatTurnModel>? History);
