@@ -47,7 +47,7 @@ convention is that features ship with tests. None of them call an LLM.
 ## Open questions (please decide before Phase 2+)
 
 | # | Question | Recommendation |
-|---|---|---|
+| --- | --- | --- |
 | Q1 | **Retrieval store.** (A) pgvector in the existing Postgres; (B) in-memory vector store built at startup; (C) keyword search, no embeddings. | **A.** It is closest to a real system and teaches the most. It needs a pgvector image in AppHost and in the ApiTests Testcontainer, plus an embedding model (reuses the OpenAI key). B is the fallback if the image change is unwelcome. |
 | Q2 | **Where retrieval lives.** MCP tools are thin wrappers over the API today. | Keep that: `GET /knowledge/search` in the API, `search_knowledge` in MCP calls it. |
 | Q3 | **Order cancellation.** *Decided: add real cancellation all the way down (entity, migration, repository, domain, API, MCP).* It gives the course a destructive, per-user, rule-bound action to attack. Sub-questions below (Q3a-c). | Decided. |
@@ -362,13 +362,6 @@ text in retrieved content (Phase 5).
   no `add_to_cart`, every order stayed `Placed` and every cart stayed empty, and the canary never
   appeared. So the baseline payloads are weak against this model and prompt; useful as a
   starting dataset, and the course will need stronger or more varied attacks to find failures.
-
-## Phase 6: Documentation
-
-- [ ] Update `CLAUDE.md` (projects table, Agent/MCP tools list, pgvector,
-      new endpoints, seeding flag).
-- [ ] Update `readme.md`'s feature list. Leave "Additional Tests to Create"
-      alone, per CLAUDE.md.
 
 ## Suggested order and checkpoints
 
