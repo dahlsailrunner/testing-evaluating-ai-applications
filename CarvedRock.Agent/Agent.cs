@@ -1,7 +1,8 @@
-﻿using Microsoft.Extensions.AI;
+﻿using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
-using OpenAI.Chat;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using System.Text;
@@ -9,22 +10,57 @@ using System.Text;
 namespace CarvedRock.Agent;
 
 public class Agent(IChatClient chatClient,
-            IConfiguration config,
+            IMcpClientProvider mcpClientProvider,
             ILogger<Agent> logger,
             IHttpContextAccessor httpCtxAccessor)
 {
+    /// <summary>Streaming run used by the web app's chat. Yields text only.</summary>
     public async IAsyncEnumerable<string> GetAgentResponse(string message,
         List<ChatTurn>? history,
         [EnumeratorCancellation] CancellationToken cxl)
     {
         logger.LogInformation("Got into the Agent method.");
 
-        var mcpClient = await McpClientHelper.GetMcpClient(config, httpCtxAccessor, cxl);
+        var (agent, messages, _) = await PrepareAsync(message, history, cxl);
+
+        await foreach (var update in
+                    agent.RunStreamingAsync(messages, cancellationToken: cxl))
+        {
+            yield return update.ToString();
+        }
+    }
+
+    /// <summary>
+    /// Non-streaming run that returns everything about the run (tool calls, usage,
+    /// timing, prompt version) rather than just the text.
+    /// </summary>
+    public async Task<AgentRunResult> RunAsync(string message,
+        List<ChatTurn>? history,
+        CancellationToken cxl)
+    {
+        logger.LogInformation("Got into the Agent run method.");
+
+        var (agent, messages, promptVersion) = await PrepareAsync(message, history, cxl);
+
+        var stopwatch = Stopwatch.StartNew();
+        var response = await agent.RunAsync(messages, cancellationToken: cxl);
+        stopwatch.Stop();
+
+        return new AgentRunResult(response.Text, messages, [.. response.Messages],
+            response.Usage, stopwatch.Elapsed, promptVersion);
+    }
+
+    // Shared by both run paths so they always use the same tools, prompt, and history handling.
+    private async Task<(AIAgent Agent, List<ChatMessage> Messages, string PromptVersion)> PrepareAsync(
+        string message, List<ChatTurn>? history, CancellationToken cxl)
+    {
+        var mcpClient = await mcpClientProvider.GetClientAsync(cxl);
 
         var tools = await mcpClient.ListToolsAsync(cancellationToken: cxl);
 
-        var prompt = await GetPromptAsync(message, mcpClient,
+        var (prompt, promptVersion) = await GetPromptAsync(message, mcpClient,
             httpCtxAccessor.HttpContext?.User, cxl);
+        Activity.Current?.SetTag("carvedrock.prompt.version", promptVersion);
 
         var agent = chatClient.AsAIAgent(
             instructions: prompt,
@@ -35,21 +71,17 @@ public class Agent(IChatClient chatClient,
         // on every request - this is what lets a follow-up like "yes, add it to cart" resolve
         // against what was actually recommended earlier in the conversation.
         var messages = (history ?? [])
-            .Select(turn => new Microsoft.Extensions.AI.ChatMessage(
+            .Select(turn => new ChatMessage(
                 turn.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase) ? ChatRole.Assistant : ChatRole.User,
                 turn.Content))
-            .Append(new Microsoft.Extensions.AI.ChatMessage(ChatRole.User, message))
+            .Append(new ChatMessage(ChatRole.User, message))
             .ToList();
 
-        await foreach (var update in
-                    agent.RunStreamingAsync(messages, cancellationToken: cxl))
-        {
-            yield return update.ToString();
-        }
+        return (agent, messages, promptVersion);
     }
 
-    private static async Task<string> GetPromptAsync(string message, McpClient mcpClient,
-                                    ClaimsPrincipal? user, CancellationToken cxl)
+    private static async Task<(string Prompt, string Version)> GetPromptAsync(string message,
+                                    McpClient mcpClient, ClaimsPrincipal? user, CancellationToken cxl)
     {
         if (message.StartsWith("/admin", StringComparison.InvariantCultureIgnoreCase) &&
             (user?.IsInRole("admin") ?? false))
@@ -60,29 +92,9 @@ public class Agent(IChatClient chatClient,
             {
                 adminPrompt.AppendLine((msg.Content as TextContentBlock)!.Text);
             }
-            return adminPrompt.ToString();
+            return (adminPrompt.ToString(), AgentPrompts.AdminVersion);
         }
 
-        return
-            """
-        You are an assistant that can make recommendations about CarvedRock products.
-        Limit product recommendations to 3 for any request.
-        After recommending products, ask the user whether they'd like any of them added to their cart.
-        If a later message in this conversation confirms adding one or more of the products you
-        already discussed (e.g. "yes", "sure", "add them", "please add the boots"), call the
-        add_to_cart tool once for each confirmed product, using its id and a quantity of 1.
-        If the user provides a response like "yes - number 3" you need to reference your recommendations
-        and add the third recommended product to the cart (and look up its ID) rather than using 3 as
-        the ID of the product being added.
-        Only add products that were actually discussed earlier in this conversation. If the user's
-        confirmation message itself names a specific product (e.g. "add the Desert Walker") or only
-        one product was discussed, treat that as unambiguous and call add_to_cart right away - do not
-        ask a second confirming question. Only ask for clarification when multiple different products
-        were discussed and the user's message doesn't make clear which ones they mean.
-        Before calling add_to_cart, always call get_products or get_single_product first - even if you
-        already discussed the product earlier - and use the exact numeric "id" field from that tool's
-        result. Never guess an id, and never use a product's position in a list as its id.
-        If you can't help with a request, please say so politely.
-        """;
+        return (AgentPrompts.Customer, AgentPrompts.CustomerVersion);
     }
 }

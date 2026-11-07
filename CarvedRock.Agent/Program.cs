@@ -20,6 +20,7 @@ builder.AddOpenAIClient("kyt-OpenAI", configureSettings: settings =>
 }).AddChatClient(builder.Configuration.GetValue<string>("AIConnection:OpenAIModel"));
 
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IMcpClientProvider, McpClientProvider>();
 builder.Services.AddScoped<Agent>();
 
 var authority = builder.Configuration.GetValue<string>("Auth:Authority");
@@ -73,6 +74,11 @@ app.UseAuthorization();
 
 app.MapPost("/agent", (AgentChatRequest request, Agent agent, CancellationToken cancellationToken) =>
     agent.GetAgentResponse(request.Message, request.History, cancellationToken));
+
+// Non-streaming variant: same request, same auth as /agent, but the response includes the
+// tool calls the agent made, token usage, elapsed time, and the prompt version.
+app.MapPost("/agent/run", async (AgentChatRequest request, Agent agent, CancellationToken cancellationToken) =>
+    AgentRunMapper.ToResponse(await agent.RunAsync(request.Message, request.History, cancellationToken)));
 
 app.Run();
 

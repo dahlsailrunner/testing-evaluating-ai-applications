@@ -79,7 +79,7 @@ The OpenAI key is an Aspire parameter (`Parameters:openaiKey`, `AIConnection__Op
 | `CarvedRock.Api` | Controllers, `ValidationExceptionHandler`, `EmailService`, Scalar/OpenAPI |
 | `CarvedRock.WebApp` | Razor Pages UI; talks to the API through typed `ProductService`/`CartService` HttpClients |
 | `CarvedRock.Mcp` | MCP server — `CarvedRockTools` (anonymous) and `AdminTools` (`[Authorize]`), `TokenForwarder` relays the caller's bearer token to the API |
-| `CarvedRock.Agent` | `/agent` endpoint; OpenAI chat client wired to the MCP server's tools |
+| `CarvedRock.Agent` | `POST /agent` (streams text) and `POST /agent/run` (non-streaming: tool calls, token usage, elapsed time, prompt version); OpenAI chat client wired to the MCP server's tools via an injectable `IMcpClientProvider`; prompts and their version ids live in `AgentPrompts` (bump `AdminVersion` when `CarvedRock.Mcp/AdminPrompt.cs` changes) |
 | `MailKit.Client` | Hand-rolled Aspire client integration (factory, settings, health check) |
 | `CarvedRock.ServiceDefaults` | OpenTelemetry, health checks, service discovery, resilience |
 
@@ -97,7 +97,7 @@ Because the IdP is external and shared, its login page is the main source of fla
 
 They are separate projects **because top-level statements make `Program` ambiguous** across multiple `WebApplicationFactory<Program>` targets. All use **TUnit** (not xUnit/NUnit): `await Assert.That(x).IsEqualTo(y)`, `[Before(Class)]`/`[After(TestSession)]` hooks, `[ClassDataSource<T>(Shared = SharedType.PerTestSession)]` for fixtures, `[Arguments]`/`[MethodDataSource]` for data-driven cases, `[DependsOn]` for ordering. Common namespaces are declared as `<Using>` items in each `.csproj` rather than per-file.
 
-**`tests/CarvedRock.UnitTests`** — validators only, no I/O. Uses `TUnit.Mocks` source-generated mocks: `ICarvedRockRepository.Mock()`, then `mock.IsProductNameUniqueAsync(Any()).Returns(true)`. `ProductValidation-DataDriven.cs` is the reference for the three data-driven styles (inline `[Arguments]`, `MethodDataSource`, `TestDataRow` with display names).
+**`tests/CarvedRock.UnitTests`** — validators, order/cart logic, and the agent run-result mapper (`AgentRunMapperTests`, pure mapping of `ChatMessage`s, no model calls); no I/O. Uses `TUnit.Mocks` source-generated mocks: `ICarvedRockRepository.Mock()`, then `mock.IsProductNameUniqueAsync(Any()).Returns(true)`. `ProductValidation-DataDriven.cs` is the reference for the three data-driven styles (inline `[Arguments]`, `MethodDataSource`, `TestDataRow` with display names).
 
 **`tests/CarvedRock.ApiTests`** — in-process API testing (`TUnit.AspNetCore`).
 

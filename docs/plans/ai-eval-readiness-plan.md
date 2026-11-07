@@ -59,25 +59,32 @@ convention is that features ship with tests. None of them call an LLM.
 | Q5 | **Adversarial content** (poisoned description / knowledge doc). Always seeded, or behind a flag? | Behind config flag `Seed:IncludeAdversarialContent`, default `false`, so the normal UI is never poisoned and demos switch it on. |
 | Q6 | **Decided: left out of the repo.** Fake-`IChatClient` agent tests, MCP contract snapshot tests, and session tests are built live in the course demos. Phase 1's seams exist to make them possible. | Decided. |
 
-## Phase 1: Agent seams (unblocks most course objectives)
+## Phase 1: Agent seams (unblocks most course objectives) - DONE
 
 Goal: make the agent measurable and substitutable without changing the
 `/agent` streaming contract the WebApp uses.
 
-- [ ] Add `IMcpClientProvider` (wrapping `McpClientHelper`) and inject it into
+- [x] Add `IMcpClientProvider` (wrapping `McpClientHelper`) and inject it into
       `Agent`; keep `McpClientHelper` as the production implementation.
-- [ ] Extract prompts into `AgentPrompts` with a `Version` constant surfaced
-      on the run result (and as an activity tag).
-- [ ] Add a non-streaming `RunAsync` on `Agent` returning an
-      `AgentRunResult`: final text, full message list (including tool calls
-      and results), `UsageDetails`, elapsed time, prompt version. Share the
-      setup with the streaming path.
-- [ ] Expose it as `POST /agent/run` (same auth, same `AgentChatRequest`) so
-      demos and Scalar can see tool calls and usage over HTTP.
-- [ ] Keep the streaming `/agent` response byte-compatible. Existing AppTests
-      and `Listing.cshtml` must keep working.
-- [ ] Tests (no LLM): unit/API-level tests for the result mapping using a
-      stub, and for `/agent/run` auth (401 anonymous where applicable).
+- [x] Extract prompts into `AgentPrompts` with a version constant per prompt
+      surfaced on the run result and as the `carvedrock.prompt.version`
+      activity tag. The admin prompt text still lives in the MCP server, so
+      `AgentPrompts.AdminVersion` must be bumped when `AdminPrompt.cs` changes.
+- [x] Add a non-streaming `Agent.RunAsync` returning an `AgentRunResult`:
+      final text, the input conversation, all response messages (tool calls
+      and results included), `UsageDetails`, elapsed time, prompt version.
+      Setup is shared with the streaming path via `PrepareAsync`.
+- [x] Expose it as `POST /agent/run` (same auth as `/agent`, same
+      `AgentChatRequest`). The JSON (`AgentRunResponse`) lists tool calls with
+      arguments and results paired by call id, plus usage, elapsed ms, and
+      prompt version.
+- [x] Streaming `/agent` is unchanged in behavior (same prompt, tools, history
+      handling).
+- [x] Tests (no LLM): `AgentRunMapperTests` in `CarvedRock.UnitTests`
+      (call/result pairing, errors, usage, null handling). `/agent` allows
+      anonymous callers, so there is no 401 case to test for `/agent/run`.
+- [ ] Not yet verified end to end: `/agent` streaming and `/agent/run` against
+      a real model (needs an OpenAI key, `aspire run`).
 
 ## Phase 2: Order lookup, cancellation, and multi-step workflows
 
