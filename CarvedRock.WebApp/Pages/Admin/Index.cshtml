@@ -148,7 +148,7 @@ else
                     @Html.DisplayFor(modelItem => item.Description)
                 </td>
                 <td>
-                    @Html.DisplayFor(modelItem => item.Price)
+                    @string.Format("{0:C}", item.Price)
                 </td>
                 <td>
                     <a style="font-weight:bold;" asp-page="./Edit" asp-route-id="@item.Id">Edit</a> |
