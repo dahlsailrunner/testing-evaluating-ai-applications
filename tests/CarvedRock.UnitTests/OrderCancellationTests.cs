@@ -147,6 +147,21 @@ public class OrderCancellationTests
     }
 
     [Test]
+    public async Task GetAllOrdersReturnsEveryCustomersOrdersWithTheirStatus()
+    {
+        var repo = ICarvedRockRepository.Mock();
+        var other = PlacedOrder(OrderStatus.Shipped);
+        other.Id = 6;
+        other.UserId = "user-2";
+        repo.GetAllOrdersAsync().Returns(new List<Order> { PlacedOrder(), other });
+
+        var orders = await LogicFor(repo, IOrderEmailSender.Mock()).GetAllOrdersAsync();
+
+        await Assert.That(orders.Select(o => o.Id)).IsEquivalentTo(new[] { 5, 6 });
+        await Assert.That(orders.Single(o => o.Id == 6).Status).IsEqualTo("Shipped");
+    }
+
+    [Test]
     public async Task AdminCanGetAnyOrder()
     {
         var repo = ICarvedRockRepository.Mock();

@@ -85,6 +85,50 @@ public partial class WebAppTests
         await Assert.That(order.CancellationReason).IsEqualTo("Changed my mind");
     }
 
+    // Admin page, Orders tab: every customer's orders; Placed ones can be shipped or cancelled,
+    // Shipped and Cancelled ones are view-only.
+    [Test]
+    [RecordVideo]
+    [NotInParallel("bob-cart")]
+    public async Task AdminCanShipAndCancelOrdersFromTheAdminOrdersTab()
+    {
+        await SignInAsBobWithEmptyCartAsync();
+        await PlaceOrderViaUiAsync("Wetland Wader");
+        await PlaceOrderViaUiAsync("Wetland Wader");
+
+        await Page.GotoAsync(new Uri(new Uri(WebAppUrl), "Admin").ToString());
+        await Page.GetByRole(AriaRole.Link, new() { Name = "Orders", Exact = true }).ClickAsync();
+        await Expect(Page.Locator("#admin-orders")).ToBeVisibleAsync();
+
+        // newest first: the first two Wetland Wader rows are the orders this test just placed
+        var rows = Page.Locator("#admin-orders tbody tr").Filter(new() { HasText = "Wetland Wader" });
+        var shipId = int.Parse((await rows.Nth(0).Locator("td").First.InnerTextAsync()).TrimStart('#'));
+        var cancelId = int.Parse((await rows.Nth(1).Locator("td").First.InnerTextAsync()).TrimStart('#'));
+
+        await Page.Locator($"#order-{shipId}").GetByRole(AriaRole.Button, new() { Name = "Ship" }).ClickAsync();
+        var message = Page.Locator("#order-status-message");
+        await Expect(message).ToContainTextAsync("marked as shipped");
+        await Expect(Page.Locator($"#order-{shipId}")).ToContainTextAsync("Shipped");
+
+        await Page.Locator($"#order-{cancelId}").GetByRole(AriaRole.Button, new() { Name = "Cancel" }).ClickAsync();
+        await Page.GetByRole(AriaRole.Dialog).GetByLabel("Reason").FillAsync("Out of stock");
+        await Page.GetByRole(AriaRole.Dialog)
+                .GetByRole(AriaRole.Button, new() { Name = "Yes, cancel order" }).ClickAsync();
+        await Expect(message).ToContainTextAsync("has been cancelled");
+        await Expect(Page.Locator($"#order-{cancelId}")).ToContainTextAsync("Cancelled");
+
+        // both are now view-only
+        foreach (var id in new[] { shipId, cancelId })
+            await Expect(Page.Locator($"#order-{id}").GetByRole(AriaRole.Button)).ToHaveCountAsync(0);
+
+        await using var db = await Fixture.CreateDbContextAsync();
+        var shipped = await db.Orders.AsNoTracking().SingleAsync(o => o.Id == shipId);
+        var cancelled = await db.Orders.AsNoTracking().SingleAsync(o => o.Id == cancelId);
+        await Assert.That(shipped.Status.ToString()).IsEqualTo("Shipped");
+        await Assert.That(cancelled.Status.ToString()).IsEqualTo("Cancelled");
+        await Assert.That(cancelled.CancellationReason).IsEqualTo("Out of stock");
+    }
+
     [Test]
     [RecordVideo]
     [NotInParallel("bob-cart")]

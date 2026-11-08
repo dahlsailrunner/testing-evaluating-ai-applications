@@ -242,6 +242,30 @@ public class OrderApiTests : ApiTestsBase
     }
 
     [Test]
+    public async Task AdminCanListEveryCustomersOrders()
+    {
+        var first = await PlaceOrderAsync(CustomerClient("order-all-first"));
+        var second = await PlaceOrderAsync(CustomerClient("order-all-second"));
+        var admin = AdminClient();
+        await admin.PostAsync($"/order/{second.Id}/ship", content: null);
+
+        var all = await admin.GetFromJsonAsync<List<ApiOrder>>("/order/all");
+
+        await Assert.That(all!.Select(o => o.Id)).Contains(first.Id);
+        await Assert.That(all!.Single(o => o.Id == second.Id).Status).IsEqualTo("Shipped");
+        // newest first
+        await Assert.That(all!.Select(o => o.Id)).IsEquivalentTo(all!.Select(o => o.Id).OrderByDescending(i => i));
+    }
+
+    [Test]
+    public async Task CustomerCannotListAllOrders()
+    {
+        var response = await CustomerClient("order-all-customer").GetAsync("/order/all");
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Forbidden);
+    }
+
+    [Test]
     public async Task OrderEndpointsRequireAuthentication()
     {
         var anonymous = Factory.CreateClient();

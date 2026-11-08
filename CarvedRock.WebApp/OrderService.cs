@@ -14,6 +14,10 @@ public interface IOrderService
 {
     Task<List<OrderModel>> GetOrdersAsync();
     Task<CancelOrderResult> CancelOrderAsync(int orderId, string? reason);
+
+    // admin only (the API enforces it)
+    Task<List<OrderModel>> GetAllOrdersAsync();
+    Task<CancelOrderResult> ShipOrderAsync(int orderId);
 }
 
 public class OrderService : IOrderService
@@ -47,6 +51,34 @@ public class OrderService : IOrderService
     {
         await SetAuthorizationHeader();
         return await Client.GetFromJsonAsync<List<OrderModel>>("Order") ?? [];
+    }
+
+    public async Task<List<OrderModel>> GetAllOrdersAsync()
+    {
+        await SetAuthorizationHeader();
+        return await Client.GetFromJsonAsync<List<OrderModel>>("Order/all") ?? [];
+    }
+
+    // CancelOrderResult.Success means "the action worked" here: for ship, the order is now shipped
+    public async Task<CancelOrderResult> ShipOrderAsync(int orderId)
+    {
+        await SetAuthorizationHeader();
+        var response = await Client.PostAsync($"Order/{orderId}/ship", null);
+
+        switch (response.StatusCode)
+        {
+            case HttpStatusCode.OK:
+                return new CancelOrderResult(true, $"Order #{orderId} has been marked as shipped.");
+            case HttpStatusCode.NotFound:
+                return new CancelOrderResult(false, $"Order #{orderId} could not be found.");
+            case HttpStatusCode.Conflict: // no longer Placed
+                var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+                return new CancelOrderResult(false,
+                    problem?.Detail ?? $"Order #{orderId} can no longer be shipped.");
+            default:
+                response.EnsureSuccessStatusCode();
+                return new CancelOrderResult(false, "Something went wrong shipping the order.");
+        }
     }
 
     public async Task<CancelOrderResult> CancelOrderAsync(int orderId, string? reason)

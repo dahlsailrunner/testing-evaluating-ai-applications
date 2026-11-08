@@ -15,6 +15,11 @@ public class OrderController(IOrderLogic orderLogic,
     public async Task<List<OrderModel>> GetMine() =>
         await orderLogic.GetOrdersAsync(User.GetUserId());
 
+    // Every customer's orders, for the admin Orders tab. "all" can't clash with {id:int}.
+    [HttpGet("all")]
+    [Authorize(Roles = "admin")]
+    public async Task<List<OrderModel>> GetAll() => await orderLogic.GetAllOrdersAsync();
+
     // 404 for an order that doesn't exist *and* for one that belongs to someone else, so
     // order ids can't be probed. Admins can see any order.
     [HttpGet("{id:int}")]

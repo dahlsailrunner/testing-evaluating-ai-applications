@@ -63,6 +63,12 @@ public class OrderLogic(ICarvedRockRepository repo,
         return orders.Select(MapToModel).ToList();
     }
 
+    public async Task<List<OrderModel>> GetAllOrdersAsync()
+    {
+        var orders = await repo.GetAllOrdersAsync();
+        return orders.Select(MapToModel).ToList();
+    }
+
     public async Task<OrderModel?> GetOrderAsync(string userId, bool isAdmin, int orderId)
     {
         var order = await repo.GetOrderAsync(orderId);

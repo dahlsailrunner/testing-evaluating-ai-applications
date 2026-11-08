@@ -85,7 +85,7 @@ will have a screenshot and some videos that were captured during Playwright test
   while you're looking at the page, trying to cancel it shows an error instead.
 * An `Admin` page is available for "bob" (the admin user)
 * Navigating to `/admin` after logging in as `alice` will show an unauthorized page
-* Product updates can be made on the admin page
+* Product updates can be made on the Products tab of the admin page; its Orders tab lists every customer's orders (newest first), where `Placed` orders can be shipped or cancelled and `Shipped` or `Cancelled` ones are view-only
 * **An AI chat is on the product listing page that can interact with
 the MCP server** (see below) -- it uses the `agent` API. It can:
   * recommend products and, when you confirm, add them to your cart
@@ -109,6 +109,8 @@ the MCP server** (see below) -- it uses the `agent` API. It can:
   * `POST /order` places an order from the cart (and sends the confirmation email)
   * `GET /order` lists your orders, and `GET /order/{id}` returns one - someone else's order
     is reported as not found (admins can see any order)
+  * `GET /order/all` (admin only) lists every customer's orders, newest first - it feeds the
+    Orders tab on the admin page, where `Placed` orders can be shipped or cancelled
   * `POST /order/{id}/cancel` cancels an order (with an optional reason). Only the owner or
     an admin can do it and only while the order is `Placed`; a shipped or already-cancelled
     order returns `409 Conflict`. A cancellation email is sent.
@@ -264,7 +266,6 @@ even ask for any new Playwright tests to be recorded.
 
 #### Implement New Features
 
-* Add admin ui for reviewing placed orders
 * Add ability to see changes to products made by admins - audit log
 * Add ability for admins to create promotions / sales / discounts temporarily for certain products
 * Add support for guest (anonymous) checkout

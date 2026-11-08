@@ -8,6 +8,9 @@ public interface IOrderLogic
 
     Task<List<OrderModel>> GetOrdersAsync(string userId);
 
+    /// <summary>Every customer's orders, newest first. Callers must restrict this to admins.</summary>
+    Task<List<OrderModel>> GetAllOrdersAsync();
+
     /// <summary>Null when the order doesn't exist or belongs to someone else (unless <paramref name="isAdmin"/>).</summary>
     Task<OrderModel?> GetOrderAsync(string userId, bool isAdmin, int orderId);
 
