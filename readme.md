@@ -9,7 +9,7 @@ Key concepts for this repo and course will include
 * "Happy path" or generally-normal use of AI features
 * Adversarial use of AI features
 * Reliability of results based on repeat usage or requests
-* Leveraging the [Microsoft.Extensions.AI.Evaluation] testing library
+* Leveraging the [Microsoft.Extensions.AI.Evaluation testing libraries](https://learn.microsoft.com/en-us/dotnet/ai/evaluation/libraries)
 * Assessment of multiple aspects of interactions, including groundedness, relevance, task
 completion, tool call accuracy, and safety
 * Tracking of call latency and cost -- both for the application and the evaluations
@@ -23,17 +23,10 @@ evaluation tests and report results
 
 ## Getting Started
 
-You need the [Aspire prerequisites](https://aspire.dev/get-started/prerequisites/).
-
-### VS Code Setup
-
-You need the following extension:
-
-* [C# Dev Kit](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csdevkit)
+You need the [Aspire prerequisites](https://aspire.dev/get-started/prerequisites/).  IDEs
+that work well with this solution are VS Code, Visual Studio, and Rider.
 
 Then just hit `F5` to run the app.
-
-The [Aspire CLI](https://aspire.dev/get-started/install-cli/#install-the-aspire-cli) is highly recommended, along with the [Aspire VS Code Extension](https://aspire.dev/get-started/aspire-vscode-extension/).
 
 ### AI Setup
 
@@ -55,9 +48,13 @@ dotnet user-secrets set "Parameters:openaiKey" "<your-openai-key>" --project .\C
 ### Running the Existing Tests
 
 To run the tests that have already been created and look at the reports showing
-the results and coverage, run the following command:
+the results and coverage, run the following commands:
 
 ```bash
+# this first command will install the version of chromium used by playrwright
+# during the tests
+pwsh tests/CarvedRock.AppTests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium
+
 ./test-with-coverage.ps1 -ShowReports
 ```
 
