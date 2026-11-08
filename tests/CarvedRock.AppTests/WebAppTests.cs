@@ -70,7 +70,7 @@ public partial class WebAppTests : CustomPageTest
     // alice's cart is shared backend state across every test that logs in as her -
     // run only after CustomerCanPlaceOrderAndGetEmail has cleared it via checkout.
     [DependsOn(nameof(CustomerCanPlaceOrderAndGetEmail))]
-    public async Task CustomerCanCancelOrderFromCartPage()
+    public async Task CustomerCanClearCartFromCartPage()
     {
         await Page.GotoAsync(WebAppUrl);
         await Page.GetByRole(AriaRole.Link, new() { Name = "Footwear" }).ClickAsync();
@@ -84,7 +84,7 @@ public partial class WebAppTests : CustomPageTest
 
         await Expect(Page.Locator("tbody")).ToContainTextAsync("Desert Walker");
 
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Cancel Order / Clear Cart" })
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Clear Cart", Exact = true })
                     .ClickAsync();
 
         await Expect(Page.GetByText("GET A GRIP")).ToBeVisibleAsync(); // redirected home
@@ -92,8 +92,8 @@ public partial class WebAppTests : CustomPageTest
     }
 
     [Test]
-    [DependsOn(nameof(CustomerCanCancelOrderFromCartPage))]
-    public async Task CustomerCanCancelOrderFromCheckoutPage()
+    [DependsOn(nameof(CustomerCanClearCartFromCartPage))]
+    public async Task CustomerCanClearCartFromCheckoutPage()
     {
         await Page.GotoAsync(WebAppUrl);
         await Page.GetByRole(AriaRole.Link, new() { Name = "Footwear" }).ClickAsync();
@@ -109,7 +109,7 @@ public partial class WebAppTests : CustomPageTest
 
         await Expect(Page.Locator("tbody")).ToContainTextAsync("Desert Walker");
 
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Cancel Order / Clear Cart" })
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Clear Cart", Exact = true })
                     .ClickAsync();
 
         await Expect(Page.GetByText("GET A GRIP")).ToBeVisibleAsync(); // redirected home
@@ -141,21 +141,43 @@ public partial class WebAppTests : CustomPageTest
 
         await Page.GetByRole(AriaRole.Link, new() { Name = "Footwear" }).ClickAsync();
 
-        await Page.GetByRole(AriaRole.Textbox, new() { Name = "Describe your activity" })
-                        .FillAsync("/admin delete products 20 and 23");
+        var chatInput = Page.GetByRole(AriaRole.Textbox, new() { Name = "Describe your activity" });
+        var sendButton = Page.GetByRole(AriaRole.Button, new() { Name = "Send" });
 
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Send" }).ClickAsync();
+        // turn 1: delete_product requires confirmation, so the assistant must ask first
+        await chatInput.FillAsync("/admin delete products 20 and 23");
+        await sendButton.ClickAsync();
         await Expect(Page.Locator("#chatMessages"))
-                .ToContainTextAsync("successfully",  // be careful - non-deterministic!!
-                    options: new() { Timeout = 15_000 });
+                .ToContainTextAsync(new Regex("confirm|proceed|are you sure|go ahead", RegexOptions.IgnoreCase),
+                    new() { Timeout = 15_000 }); // be careful - non-deterministic wording!!
 
-        var actualProduct = await Fixture.TestDbContext.Products
-                                .FirstOrDefaultAsync(p => p.Id == 20 || p.Id == 23);
-        await Assert.That(actualProduct).IsNull();
+        // hard assertion: nothing has been deleted yet
+        // (own context: the browser tests run in parallel and a DbContext isn't thread-safe)
+        await using var db = await Fixture.CreateDbContextAsync();
+        var stillThere = await db.Products.AsNoTracking()
+                                .CountAsync(p => p.Id == 20 || p.Id == 23);
+        await Assert.That(stillThere).IsEqualTo(2);
+
+        // turn 2: the admin confirms (no "/admin" prefix needed - admin mode lasts for the conversation)
+        await chatInput.FillAsync("Yes, go ahead and delete them.");
+        await sendButton.ClickAsync();
+
+        // Don't wait on chat text here: the turn-1 reply already says things like "permanently
+        // deleted", so any wording we could match would be satisfied before the deletion happens.
+        // The database is the source of truth, so poll it until the products are gone.
+        var deleted = false;
+        for (var attempt = 0; attempt < 40 && !deleted; attempt++)
+        {
+            deleted = !await db.Products.AsNoTracking()
+                                .AnyAsync(p => p.Id == 20 || p.Id == 23);
+            if (!deleted) await Task.Delay(500);
+        }
+        await Assert.That(deleted).IsTrue();
     }
 
     [Test]
     [RecordVideo]
+    [NotInParallel("bob-cart")] // shares bob's cart with the My Orders tests (WebAppTests.Orders.cs)
     // bob (admin), not alice - alice's cart is shared state across the DependsOn chain above;
     // bob's cart isn't touched by any other test, so this one needs no ordering.
     public async Task CustomerCanAddRecommendedProductToCartViaChat()
@@ -169,7 +191,7 @@ public partial class WebAppTests : CustomPageTest
         // this AppHost's Postgres survives across separate test runs) - start from a known-empty
         // cart so the "Cart (1)" assertion below is reliable no matter how many times this ran before.
         await Page.GotoAsync(new Uri(new Uri(WebAppUrl), "Cart").ToString());
-        var clearCartButton = Page.GetByRole(AriaRole.Button, new() { Name = "Cancel Order / Clear Cart" });
+        var clearCartButton = Page.GetByRole(AriaRole.Button, new() { Name = "Clear Cart", Exact = true });
         if (await clearCartButton.IsVisibleAsync())
         {
             await clearCartButton.ClickAsync();

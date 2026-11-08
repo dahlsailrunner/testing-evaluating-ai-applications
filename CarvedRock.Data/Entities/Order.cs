@@ -7,5 +7,8 @@ public class Order
     public string Email { get; set; } = null!;
     public DateTime OrderDate { get; set; }
     public double Total { get; set; }
+    public OrderStatus Status { get; set; } = OrderStatus.Placed;
+    public DateTime? CancelledAt { get; set; }
+    public string? CancellationReason { get; set; }
     public ICollection<OrderDetail> Details { get; set; } = new List<OrderDetail>();
 }

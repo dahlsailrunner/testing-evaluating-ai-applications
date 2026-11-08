@@ -13,6 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\CarvedRock.Agent\CarvedRock.Agent.csproj" />
     <ProjectReference Include="..\..\CarvedRock.Domain\CarvedRock.Domain.csproj" />
   </ItemGroup>
 

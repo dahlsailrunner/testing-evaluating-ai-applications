@@ -136,8 +136,9 @@ public static class PageExtensions
                                 .FillAsync(password);
         await page.GetByRole(AriaRole.Button, new() { Name = "Login" }).ClickAsync();
 
-        await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "Sign Out" }))
-                                .ToBeVisibleAsync();
+        // "Sign Out" now lives inside the user menu (hidden until opened), so the visible
+        // proof of being signed in is the menu toggle showing the user's name.
+        await Assertions.Expect(page.Locator("#userMenu")).ToBeVisibleAsync();
     }
 }
 

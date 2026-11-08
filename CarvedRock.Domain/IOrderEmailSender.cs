@@ -10,4 +10,5 @@ namespace CarvedRock.Domain;
 public interface IOrderEmailSender
 {
     Task SendOrderConfirmationAsync(Order order);
+    Task SendOrderCancellationAsync(Order order);
 }

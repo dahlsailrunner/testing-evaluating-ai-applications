@@ -1,0 +1,89 @@
+@page
+@model CarvedRock.WebApp.Pages.OrdersModel
+
+<h1>My Orders</h1>
+
+@if (!string.IsNullOrEmpty(Model.StatusMessage))
+{
+    <div class="alert @(Model.StatusIsError ? "alert-danger" : "alert-success")" role="alert" id="order-status-message">
+        @Model.StatusMessage
+    </div>
+}
+
+@if (Model.Orders.Count == 0)
+{
+    <p>You haven't placed any orders yet. Go find some gear!</p>
+}
+else
+{
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th>Order</th>
+                <th>Placed</th>
+                <th>Items</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var order in Model.Orders)
+            {
+                <tr id="order-@order.Id">
+                    <td>#@order.Id</td>
+                    <td>@order.OrderDate.ToString("yyyy-MM-dd HH:mm") UTC</td>
+                    <td>
+                        @foreach (var line in order.Details)
+                        {
+                            <div>@line.Quantity x @line.ProductName</div>
+                        }
+                    </td>
+                    <td>@string.Format("{0:C}", order.Total)</td>
+                    <td><span class="badge @OrdersModel.BadgeClass(order.Status)">@order.Status</span></td>
+                    <td>
+                        @if (order.Status == "Placed")
+                        {
+                            <button type="button" class="btn btn-outline-danger btn-sm"
+                                    data-bs-toggle="modal" data-bs-target="#cancelOrderModal"
+                                    data-order-id="@order.Id">
+                                Cancel order
+                            </button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <!-- one shared confirmation dialog; the buttons above fill in which order it is for -->
+    <div class="modal fade" id="cancelOrderModal" tabindex="-1" aria-labelledby="cancelOrderModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <form class="modal-content" method="post" asp-page-handler="Cancel">
+                <input type="hidden" name="orderId" id="cancelOrderId" />
+                <div class="modal-header">
+                    <h5 class="modal-title" id="cancelOrderModalLabel">Cancel order <span id="cancelOrderNumber"></span>?</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>This can't be undone, and we'll email you a cancellation notice.</p>
+                    <label for="cancelReason" class="form-label">Reason (optional)</label>
+                    <input type="text" class="form-control" id="cancelReason" name="reason" maxlength="200" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Keep order</button>
+                    <button type="submit" class="btn btn-danger">Yes, cancel order</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('cancelOrderModal').addEventListener('show.bs.modal', function (event) {
+            var orderId = event.relatedTarget.getAttribute('data-order-id');
+            document.getElementById('cancelOrderId').value = orderId;
+            document.getElementById('cancelOrderNumber').textContent = '#' + orderId;
+            document.getElementById('cancelReason').value = '';
+        });
+    </script>
+}

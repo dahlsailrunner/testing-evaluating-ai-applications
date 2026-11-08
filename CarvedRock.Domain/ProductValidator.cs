@@ -23,7 +23,8 @@ public class NewProductValidator : AbstractValidator<NewProductModel>
 
         RuleFor(p => p.Name)
             .NotEmpty().WithMessage("{PropertyName} is required.")
-            .MaximumLength(50).WithMessage("{PropertyName} must not exceed 50 characters.");
+            .MaximumLength(ProductLimits.MaxNameLength)
+            .WithMessage($"{{PropertyName}} must not exceed {ProductLimits.MaxNameLength} characters.");
 
 
         RuleSet("UniqueName", () =>
@@ -34,7 +35,8 @@ public class NewProductValidator : AbstractValidator<NewProductModel>
 
         RuleFor(p => p.Description)
             .NotEmpty().WithMessage("{PropertyName} is required.")
-            .MaximumLength(150).WithMessage("{PropertyName} must not exceed 150 characters.");
+            .MaximumLength(ProductLimits.MaxDescriptionLength)
+            .WithMessage($"{{PropertyName}} must not exceed {ProductLimits.MaxDescriptionLength} characters.");
 
         RuleFor(p => p.Category)
             .Must(Constants.Categories.Contains)

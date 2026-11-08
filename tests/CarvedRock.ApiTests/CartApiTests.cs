@@ -6,7 +6,13 @@ public class CartApiTests : ApiTestsBase
     public async Task GetEmptyCartWorks()
     {
         var client = Factory.CreateClient();
-        client.AddCustomerAuthHeaders();
+        // A user of its own: AddCustomerAuthHeaders() is the same "customer" whose cart
+        // AddToCartWorks fills, and under load (all three test projects running at once) that
+        // add could land before this read and make the "empty" cart not empty.
+        client.DefaultRequestHeaders.Add("X-Authorization", "Empty Cart Tester");
+        client.DefaultRequestHeaders.Add("X-Test-sub", "empty-cart-tester");
+        client.DefaultRequestHeaders.Add("X-Test-idp", "CarvedRock");
+        client.DefaultRequestHeaders.Add("X-Test-email", "emptycarttester@someplace.com");
 
         var response = await client.GetAsync("/cart");
         var jsonContent = await response.Content.ReadAsStringAsync();
