@@ -1,0 +1,66 @@
+@* Shared by the Create and Edit pages (each has an OnPostDescribe handler): drafts the Description
+   field with the agent from the name, category and key features already on the form. The draft only
+   fills the field; the admin reviews and edits it, and nothing is saved until the form is submitted. *@
+<div class="border rounded p-3 bg-light">
+    <div class="fw-semibold mb-2">Draft the description with AI <span class="text-muted fw-normal">(optional)</span></div>
+    <label for="keyFeatures" class="form-label small">Key features (one per line, up to 8)</label>
+    <textarea id="keyFeatures" class="form-control" rows="4"
+              placeholder="Waterproof&#10;Neoprene lining&#10;Sizes 7-13"></textarea>
+    <div class="mt-2">
+        <button type="button" id="generateDescription" class="btn btn-outline-secondary btn-sm">Generate description</button>
+        <span id="describeStatus" class="small ms-2" role="status"></span>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const button = document.getElementById("generateDescription");
+        const status = document.getElementById("describeStatus");
+
+        button.addEventListener("click", async function () {
+            const form = button.closest("form");
+            const token = form.querySelector('input[name="__RequestVerificationToken"]').value;
+            const keyFeatures = document.getElementById("keyFeatures").value
+                .split("\n").map(f => f.trim()).filter(f => f.length > 0);
+
+            button.disabled = true;
+            status.className = "small ms-2 text-muted";
+            status.textContent = "Generating...";
+            try {
+                const response = await fetch("?handler=Describe", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "X-CSRF-TOKEN": token },
+                    body: JSON.stringify({
+                        name: document.getElementById("Product_Name").value,
+                        category: document.getElementById("Product_Category").value,
+                        keyFeatures: keyFeatures
+                    })
+                });
+                if (!response.ok) throw new Error("HTTP " + response.status);
+                const result = await response.json();
+
+                if (result.success) {
+                    const field = document.getElementById("Product_Description");
+                    field.value = result.description;
+                    field.dispatchEvent(new Event("input", { bubbles: true }));
+                }
+                if (!result.success) {
+                    status.className = "small ms-2 text-danger";
+                    status.textContent = result.messages.join(" ");
+                } else if (result.messages.length > 0) {
+                    // a draft that breaks a rule is still shown, so the admin can edit it
+                    status.className = "small ms-2 text-warning";
+                    status.textContent = "Draft added, but please fix: " + result.messages.join(" ");
+                } else {
+                    status.className = "small ms-2 text-success";
+                    status.textContent = "Draft added. Review and edit it before saving.";
+                }
+            } catch (e) {
+                status.className = "small ms-2 text-danger";
+                status.textContent = "Could not generate a description. Please try again.";
+            } finally {
+                button.disabled = false;
+            }
+        });
+    })();
+</script>

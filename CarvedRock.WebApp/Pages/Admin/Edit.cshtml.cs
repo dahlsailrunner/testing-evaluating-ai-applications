@@ -60,4 +60,13 @@ public class EditModel(IProductService productService) : PageModel
             return NotFound();
         }
     }
+
+    // JSON in, JSON out: the "Generate description" button on the form posts the name, category and key
+    // features here. It only drafts text; nothing is saved until the admin submits the form.
+    public async Task<IActionResult> OnPostDescribeAsync([FromBody] DescribeDraftRequest request,
+        [FromServices] IProductDescriptionService describer, CancellationToken cancellationToken)
+    {
+        var result = await describer.DraftAsync(request, cancellationToken);
+        return new JsonResult(result);
+    }
 }

@@ -48,6 +48,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddHttpClient<IProductService, ProductService>();
 builder.Services.AddHttpClient<ICartService, CartService>();
 builder.Services.AddHttpClient<IOrderService, OrderService>();
+builder.Services.AddScoped<IProductDescriptionService, ProductDescriptionService>();
 
 builder.Services.AddOpenIdConnectAccessTokenManagement();
 builder.Services.AddUserAccessTokenHttpClient("AI",

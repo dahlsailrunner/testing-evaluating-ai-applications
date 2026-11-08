@@ -85,7 +85,7 @@ will have a screenshot and some videos that were captured during Playwright test
   while you're looking at the page, trying to cancel it shows an error instead.
 * An `Admin` page is available for "bob" (the admin user)
 * Navigating to `/admin` after logging in as `alice` will show an unauthorized page
-* Product updates can be made on the Products tab of the admin page; its Orders tab lists every customer's orders (newest first), where `Placed` orders can be shipped or cancelled and `Shipped` or `Cancelled` ones are view-only
+* Product updates can be made on the Products tab of the admin page (the Create and Edit forms have a **Generate description** button that drafts the description with the agent from the name, category and key features; the draft only fills the field, so it can be edited before saving, and a **Random picsum image** button fills in an image URL the way the sample data does); its Orders tab lists every customer's orders (newest first), where `Placed` orders can be shipped or cancelled and `Shipped` or `Cancelled` ones are view-only
 * **An AI chat is on the product listing page that can interact with
 the MCP server** (see below) -- it uses the `agent` API. It can:
   * recommend products and, when you confirm, add them to your cart
