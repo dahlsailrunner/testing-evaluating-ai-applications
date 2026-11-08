@@ -17,6 +17,12 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="Pgvector.EntityFrameworkCore" Version="0.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- adversarial test products (prompt-injection payloads); only seeded when explicitly enabled -->
+    <EmbeddedResource Include="AdversarialSeedData.json" LogicalName="AdversarialSeedData.json" />
   </ItemGroup>
 
   <ItemGroup>

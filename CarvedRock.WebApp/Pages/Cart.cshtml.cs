@@ -20,7 +20,7 @@ public class CartModel(ICartService cartService) : PageModel
         return RedirectToPage("/Checkout");
     }
 
-    public async Task<IActionResult> OnPostCancelOrder()
+    public async Task<IActionResult> OnPostClearCart()
     {
         await cartService.ClearCartAsync();
         return RedirectToPage("/Index");

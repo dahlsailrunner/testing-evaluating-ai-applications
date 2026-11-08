@@ -12,14 +12,38 @@ public class AdminTools(IHttpClientFactory httpClientFactory)
 {
     public record OperationResult(string Status, string? Message = null);
 
-    [McpServerTool(Name = "delete_product"), Description("Delete a single product based on its Id.")]
-    public async Task<OperationResult> DeleteProductAsync(int id, CancellationToken cancellationToken = default)
+    [McpServerTool(Name = "delete_product")]
+    [Description("Permanently delete a single product based on its Id. This is destructive, so call it " +
+                 "WITHOUT confirm first: nothing is deleted and the result describes the product so the " +
+                 "administrator can be asked to confirm. Only after the administrator explicitly confirms " +
+                 "in a later message, call it again with confirm=true.")]
+    public async Task<OperationResult> DeleteProductAsync(
+        [Description("The id of the product to delete.")] int id,
+        [Description("false (the default) only describes what would be deleted. Pass true only after the " +
+                     "administrator has explicitly confirmed deleting this specific product.")] bool confirm = false,
+        CancellationToken cancellationToken = default)
     {
         var client = httpClientFactory.CreateClient("CarvedRockApi");
+
+        // Look the product up first so the confirmation names exactly what would be deleted,
+        // and an unknown id is reported without asking anyone to confirm anything.
+        var lookup = await client.GetAsync($"product/{id}", cancellationToken);
+        if (lookup.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return new OperationResult("error", $"Product {id} was not found.");
+        if (!lookup.IsSuccessStatusCode)
+            throw new Exception($"Error getting product {id}; HttpResponseCode was {(int)lookup.StatusCode}");
+
+        var product = (await lookup.Content.ReadFromJsonAsync<FullProductModel>(cancellationToken))!;
+
+        if (!confirm)
+            return new OperationResult("confirmation_required",
+                $"Product {id} \"{product.Name}\" ({product.Category}, ${product.Price.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}) " +
+                "will be permanently deleted. Ask the administrator to confirm, then call delete_product again with confirm=true.");
+
         var response = await client.DeleteAsync($"product/{id}", cancellationToken);
         if (!response.IsSuccessStatusCode) throw new Exception($"Error deleting product {id}; HttpResponseCode was {(int)response.StatusCode}");
 
-        return new OperationResult("ok");
+        return new OperationResult("ok", $"Product {id} \"{product.Name}\" was deleted.");
     }
 
 

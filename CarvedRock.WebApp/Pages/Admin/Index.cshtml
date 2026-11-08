@@ -1,8 +1,112 @@
 ﻿@page
 @model CarvedRock.WebApp.Pages.Admin.IndexModel
 
-<h1>Product Administration</h1>
+<h1>Administration</h1>
 
+<ul class="nav nav-tabs" id="adminTabs">
+    <li class="nav-item">
+        <a class="nav-link @(Model.ShowOrders ? "" : "active")" id="products-tab" asp-page="./Index">Products</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(Model.ShowOrders ? "active" : "")" id="orders-tab" asp-page="./Index" asp-route-tab="orders">Orders</a>
+    </li>
+</ul>
+
+@if (Model.ShowOrders)
+{
+    @if (!string.IsNullOrEmpty(Model.StatusMessage))
+    {
+        <div class="alert @(Model.StatusIsError ? "alert-danger" : "alert-success") mt-3" role="alert" id="order-status-message">
+            @Model.StatusMessage
+        </div>
+    }
+
+    @if (Model.Orders.Count == 0)
+    {
+        <p class="mt-3">No orders have been placed yet.</p>
+    }
+    else
+    {
+        <table class="table align-middle mt-3" id="admin-orders">
+            <thead>
+                <tr>
+                    <th>Order</th>
+                    <th>Customer</th>
+                    <th>Placed</th>
+                    <th>Items</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var order in Model.Orders)
+                {
+                    <tr id="order-@order.Id">
+                        <td>#@order.Id</td>
+                        <td>@order.Email</td>
+                        <td>@order.OrderDate.ToString("yyyy-MM-dd HH:mm") UTC</td>
+                        <td>
+                            @foreach (var line in order.Details)
+                            {
+                                <div>@line.Quantity x @line.ProductName</div>
+                            }
+                        </td>
+                        <td>@string.Format("{0:C}", order.Total)</td>
+                        <td><span class="badge @IndexModel.BadgeClass(order.Status)">@order.Status</span></td>
+                        <td class="text-nowrap">
+                            @if (IndexModel.CanChange(order))
+                            {
+                                <form method="post" asp-page-handler="Ship" class="d-inline">
+                                    <input type="hidden" name="orderId" value="@order.Id" />
+                                    <button type="submit" class="btn btn-outline-success btn-sm">Ship</button>
+                                </form>
+                                <button type="button" class="btn btn-outline-danger btn-sm"
+                                        data-bs-toggle="modal" data-bs-target="#cancelOrderModal"
+                                        data-order-id="@order.Id">
+                                    Cancel
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <!-- one shared confirmation dialog; the Cancel buttons fill in which order it is for -->
+        <div class="modal fade" id="cancelOrderModal" tabindex="-1" aria-labelledby="cancelOrderModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <form class="modal-content" method="post" asp-page-handler="Cancel">
+                    <input type="hidden" name="orderId" id="cancelOrderId" />
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="cancelOrderModalLabel">Cancel order <span id="cancelOrderNumber"></span>?</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>This can't be undone, and the customer is emailed a cancellation notice.</p>
+                        <label for="cancelReason" class="form-label">Reason (optional)</label>
+                        <input type="text" class="form-control" id="cancelReason" name="reason" maxlength="200" />
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Keep order</button>
+                        <button type="submit" class="btn btn-danger">Yes, cancel order</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script>
+            document.getElementById('cancelOrderModal').addEventListener('show.bs.modal', function (event) {
+                var orderId = event.relatedTarget.getAttribute('data-order-id');
+                document.getElementById('cancelOrderId').value = orderId;
+                document.getElementById('cancelOrderNumber').textContent = '#' + orderId;
+                document.getElementById('cancelReason').value = '';
+            });
+        </script>
+    }
+}
+else
+{
 <p style="text-align:right; padding-right:100px; padding-top:30px;">
     <a class="orange-border" style="padding: 5px;font-weight:bold;" asp-page="./Create">Create New</a>
 </p>
@@ -44,7 +148,7 @@
                     @Html.DisplayFor(modelItem => item.Description)
                 </td>
                 <td>
-                    @Html.DisplayFor(modelItem => item.Price)
+                    @string.Format("{0:C}", item.Price)
                 </td>
                 <td>
                     <a style="font-weight:bold;" asp-page="./Edit" asp-route-id="@item.Id">Edit</a> |
@@ -54,3 +158,4 @@
         }
     </tbody>
 </table>
+}

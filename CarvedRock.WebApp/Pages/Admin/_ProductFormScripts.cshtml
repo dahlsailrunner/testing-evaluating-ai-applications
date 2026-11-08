@@ -1,0 +1,36 @@
+@* Small helpers for the product form (Create and Edit): a character counter for the description,
+   a "random picsum image" button that follows the sample data's strategy, and an image preview. *@
+<script>
+    (function () {
+        const description = document.getElementById("Product_Description");
+        const counter = document.getElementById("descriptionCount");
+        const limit = parseInt(description.dataset.limit, 10);
+
+        function updateCount() {
+            counter.textContent = description.value.length;
+            counter.parentElement.classList.toggle("text-danger", description.value.length > limit);
+        }
+        description.addEventListener("input", updateCount);
+        updateCount();
+
+        // SeedData.json uses https://picsum.photos/id/{id}/800/600 with ids 10, 15, 20 ... 255
+        const imageUrl = document.getElementById("Product_ImgUrl");
+        const preview = document.getElementById("imgPreview");
+
+        document.getElementById("randomImage").addEventListener("click", function () {
+            const id = 10 + 5 * Math.floor(Math.random() * 50);
+            imageUrl.value = "https://picsum.photos/id/" + id + "/800/600";
+            imageUrl.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+
+        function updatePreview() {
+            const url = imageUrl.value.trim();
+            if (url.length === 0) { preview.hidden = true; return; }
+            preview.src = url;
+        }
+        preview.addEventListener("load", function () { preview.hidden = false; });
+        preview.addEventListener("error", function () { preview.hidden = true; });
+        imageUrl.addEventListener("input", updatePreview);
+        updatePreview();
+    })();
+</script>

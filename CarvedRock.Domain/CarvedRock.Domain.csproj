@@ -6,7 +6,14 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.2.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.11.0" />
     <PackageReference Include="Riok.Mapperly" Version="4.3.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- the knowledge base documents; LogicalName keeps the resource names predictable -->
+    <EmbeddedResource Include="Knowledge\*.md" LogicalName="Knowledge/%(Filename)%(Extension)" />
+    <!-- poisoned documents for adversarial testing; only loaded when explicitly enabled -->
+    <EmbeddedResource Include="KnowledgeAdversarial\*.md" LogicalName="KnowledgeAdversarial/%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\CarvedRock.Core\CarvedRock.Core.csproj" />

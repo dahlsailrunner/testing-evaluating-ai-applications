@@ -60,7 +60,7 @@ Playwright browsers: `pwsh tests/CarvedRock.AppTests/bin/Debug/net10.0/playwrigh
 `CarvedRock.AppHost/AppHost.cs` is the single source of truth for the topology:
 
 ```
-db (Postgres 18) ──┐
+db (Postgres 18 + pgvector) ──┐
 smtp (MailPit) ────┴─> api ─> mcp ─> agent ─> webapp
                                         mcp-inspector ─> mcp
 ```
@@ -74,12 +74,12 @@ The OpenAI key is an Aspire parameter (`Parameters:openaiKey`, `AIConnection__Op
 | Project | Role |
 | --- | --- |
 | `CarvedRock.Core` | Shared DTOs (`ProductModel`, `CartModels`, `OrderModels`), `AdminClaimsTransformation`, `OpenApiHelper` |
-| `CarvedRock.Data` | EF Core `LocalContext`, entities, `CarvedRockRepository`, migrations, `SeedData.json` |
-| `CarvedRock.Domain` | Business logic (`ProductLogic`, `CartLogic`, `OrderLogic`), FluentValidation validators, Riok.Mapperly `ProductMapper` |
-| `CarvedRock.Api` | Controllers, `ValidationExceptionHandler`, `EmailService`, Scalar/OpenAPI |
-| `CarvedRock.WebApp` | Razor Pages UI; talks to the API through typed `ProductService`/`CartService` HttpClients |
-| `CarvedRock.Mcp` | MCP server — `CarvedRockTools` (anonymous) and `AdminTools` (`[Authorize]`), `TokenForwarder` relays the caller's bearer token to the API |
-| `CarvedRock.Agent` | `/agent` endpoint; OpenAI chat client wired to the MCP server's tools |
+| `CarvedRock.Data` | EF Core `LocalContext`, entities, `CarvedRockRepository`, migrations, `SeedData.json`. Also the knowledge base table (`KnowledgeChunk`, a pgvector `vector(1536)` column) and `KnowledgeRepository` (cosine-distance search). Build hand-made contexts with `UseCarvedRockNpgsql(...)`, never plain `UseNpgsql` - without `UseVector()` EF cannot build the model |
+| `CarvedRock.Domain` | Business logic (`ProductLogic`, `CartLogic`, `OrderLogic`), FluentValidation validators, Riok.Mapperly `ProductMapper`. Knowledge base: the help documents are markdown files in `Knowledge/` (embedded resources); `KnowledgeChunker` splits them by `##` section, `KnowledgeLogic` embeds them (skipping unchanged chunks by hash) and searches via `IEmbeddingGenerator` |
+| `CarvedRock.Api` | Controllers, `ValidationExceptionHandler`, `EmailService`, Scalar/OpenAPI. `GET /knowledge/search?q=&top=` (anonymous) searches the help documents; `KnowledgeIngestionService` embeds them in the background at startup (needs the OpenAI key; without it search answers 503 and everything else works). `POST /internal/reset-data` re-runs ingestion |
+| `CarvedRock.WebApp` | Razor Pages UI; talks to the API through typed `ProductService`/`CartService`/`OrderService` HttpClients. The admin Create/Edit product forms have a **Generate description** button (`_DescribeDraft` partial, an `OnPostDescribe` handler on each page, `ProductDescriptionService` calling the agent's `/agent/describe`); it only fills the field. The user menu (`#userMenu`) links to My Orders (`/Orders`: all orders with status badges, cancel for `Placed` ones) and Sign Out |
+| `CarvedRock.Mcp` | MCP server — `CarvedRockTools` (anonymous, product reads), `KnowledgeTools` (anonymous: `search_knowledge` over the help documents), `CartTools`/`OrderTools` (any signed-in user: `add_to_cart`, `clear_cart`, `get_my_orders`, `get_order`, `cancel_order`) and `AdminTools` (admin: `delete_product`, `set_product_price`). The destructive tools (`delete_product`, `cancel_order`, `clear_cart`) take `confirm` (default false): without it they change nothing and return `confirmation_required`. `TokenForwarder` relays the caller's bearer token to the API |
+| `CarvedRock.Agent` | `POST /agent` (streams text), `POST /agent/run` (non-streaming: tool calls, token usage, elapsed time, prompt version) and the admin-only `POST /agent/describe` (generative, no tools: `ProductDescriber` turns a name, category and key features into a structured `ProductDraft` and reports - never trims - any rule violations; limits come from `CarvedRock.Core.ProductLimits`, shared with the product validator); OpenAI chat client wired to the MCP server's tools via an injectable `IMcpClientProvider`; prompts and their version ids live in `AgentPrompts` (bump `AdminVersion` when `CarvedRock.Mcp/AdminPrompt.cs` changes) |
 | `MailKit.Client` | Hand-rolled Aspire client integration (factory, settings, health check) |
 | `CarvedRock.ServiceDefaults` | OpenTelemetry, health checks, service discovery, resilience |
 
@@ -97,27 +97,34 @@ Because the IdP is external and shared, its login page is the main source of fla
 
 They are separate projects **because top-level statements make `Program` ambiguous** across multiple `WebApplicationFactory<Program>` targets. All use **TUnit** (not xUnit/NUnit): `await Assert.That(x).IsEqualTo(y)`, `[Before(Class)]`/`[After(TestSession)]` hooks, `[ClassDataSource<T>(Shared = SharedType.PerTestSession)]` for fixtures, `[Arguments]`/`[MethodDataSource]` for data-driven cases, `[DependsOn]` for ordering. Common namespaces are declared as `<Using>` items in each `.csproj` rather than per-file.
 
-**`tests/CarvedRock.UnitTests`** — validators only, no I/O. Uses `TUnit.Mocks` source-generated mocks: `ICarvedRockRepository.Mock()`, then `mock.IsProductNameUniqueAsync(Any()).Returns(true)`. `ProductValidation-DataDriven.cs` is the reference for the three data-driven styles (inline `[Arguments]`, `MethodDataSource`, `TestDataRow` with display names).
+**`tests/CarvedRock.UnitTests`** — validators, order/cart logic, and the agent run-result mapper (`AgentRunMapperTests`, pure mapping of `ChatMessage`s, no model calls); no I/O. Uses `TUnit.Mocks` source-generated mocks: `ICarvedRockRepository.Mock()`, then `mock.IsProductNameUniqueAsync(Any()).Returns(true)`. `ProductValidation-DataDriven.cs` is the reference for the three data-driven styles (inline `[Arguments]`, `MethodDataSource`, `TestDataRow` with display names).
 
 **`tests/CarvedRock.ApiTests`** — in-process API testing (`TUnit.AspNetCore`).
 
 - `ApiFactory : TestWebApplicationFactory<Program>` + `ApiTestsBase : WebApplicationTest<ApiFactory, Program>`; tests get `Factory.CreateClient()` and `TestData`.
-- **Testcontainers** Postgres in `TestData` (an `IAsyncInitializer` shared per test session) seeded with 100 Bogus products using a **fixed seed (2001)** so data is reproducible. The connection string is injected via `ConfigureStartupConfiguration`.
+- **Testcontainers** Postgres (the `pgvector/pgvector` image, same as the AppHost) in `TestData` (an `IAsyncInitializer` shared per test session) seeded with 100 Bogus products using a **fixed seed (2001)** so data is reproducible. The connection string is injected via `ConfigureStartupConfiguration`.
+- **Knowledge base:** `TestData` ingests the real corpus once with `HashingEmbeddingGenerator` (deterministic hashed bag-of-words vectors, no OpenAI call), and `ApiFactory` swaps the same generator in for the API. It proves the plumbing against real pgvector; it says nothing about semantic quality. `KnowledgeApiTests` covers ranking, limits and validation.
 - **WireMock** replaces the external dad-joke API by overriding the `DadJokeUrl` config value.
 - `TestAuthHandler` is a fake auth scheme: the user comes from the `X-Authorization` header and every `X-Test-<claim>` header becomes a claim. Use the `AddAdminAuthHeaders()` / `AddCustomerAuthHeaders()` extensions.
 
 **`tests/CarvedRock.AppTests`** — full-stack, real containers (`TUnit.Aspire` + `TUnit.Playwright`).
 
 - `AppFixture : AspireFixture<CarvedRock_AppHost>` starts the whole AppHost (3-minute resource timeout), then opens a `LocalContext` against the real Postgres so tests can assert on the database directly. Endpoints come from `App.GetEndpoint(...)`/`App.CreateHttpClient(...)`.
-- Real access tokens are fetched from the Duende demo server via client credentials (`GetAdminApiClient`, `GetCustomerApiClient`, `GetAdminMcpClient`).
+- Real access tokens are fetched from the Duende demo server via client credentials (`GetAdminApiClient`, `GetCustomerApiClient`, `GetAdminMcpClient`, `GetCustomerMcpClient`).
 - `AppFixture.cs` re-declares `Product`/`NewProductModel` as local records **on purpose** — the tests assert against a documented contract rather than the app's own types.
 - `CustomPageTest : PageTest` is the Playwright base: `IgnoreHTTPSErrors` (Linux CI dev-certs), page-failure event capture, and `page.Login(user, pass)`.
 - `[RecordVideo]` is a custom attribute that flags a test via TUnit's `StateBag` (through `ITestDiscoveryEventReceiver`, so no reflection); `CustomPageTest` turns that into `RecordVideoDir` and renames the `.webm` files to test names at `[After(TestSession)]`. Artifacts land in `bin/<config>/net10.0/playwright-artifacts/`.
 
 ### Gotchas in AppTests
 
+- **Schema comes from `EnsureCreated`, not from the migrations.** `LocalContext.MigrateAndCreateData` calls `Database.EnsureCreated()`, so the `Migrations/` folder is a reference/teaching artifact. A database that already has tables will NOT pick up new tables or columns (e.g. order status, knowledge chunks) - recreate it. The AppHost's Postgres has no volume, so `aspire run` always starts fresh.
+- **Knowledge tests need an OpenAI key** (`KnowledgeTests` uses the real embedding model); they wait up to 2 minutes for the API's background ingestion.
+- **Adversarial test content is opt-in.** The AppHost parameter `includeAdversarialContent` (default `false`; set with `aspire secret set Parameters:includeAdversarialContent true`) becomes `Seed:IncludeAdversarialContent` in the API. When on, `SeedDataLoader` also seeds the *Ridgeline Daypack* product (description carries an `add_to_cart` injection payload) and `KnowledgeCorpus.Load(true)` adds a poisoned help document (`KnowledgeAdversarial/`, retrievable by recycling/resoling questions; it tells the assistant to call `cancel_order` and print `AUDIT-7731`). Normal runs and every test must have it off; `KnowledgeTests.AdversarialContentIsAbsentByDefault` is expected to fail when it is on.
+- **Orders have a status** (`Placed`/`Shipped`/`Cancelled`). `POST /order/{id}/cancel` (owner or admin; 404 for someone else's order, 409 if shipped/cancelled) and the admin-only `POST /order/{id}/ship` exist; `ship` is deliberately not an MCP tool. `GET /order/all` (admin only) feeds the admin page's Orders tab (`Admin/Index`, `?tab=orders`), where Placed orders can be shipped or cancelled.
+- **Parallel browser tests must not share `AppFixture.TestDbContext`** (a `DbContext` is not thread-safe) - use `AppFixture.CreateDbContextAsync()`.
+- **Mail assertions:** M2M tokens have no email claim, so their orders all go to `unknown@carvedrock.com`, which `OrderTests` reads from MailPit. `OrderMcpTests` uses its own address for that reason; do the same in any new test that places orders as an M2M client.
 - **Shared mutable state.** These tests run against one live database and mutate it. `WebAppTests.AdminCanDeleteProductsViaChat` deletes products 20 and 23; the MCP test updates product 22 — and `OrderTests` explicitly filters those ids out. If you add a mutating test, check the exclusions in `OrderTests.PlacingOrderWorksCompletely` and update them.
-- **Global retry policy.** `[assembly: Retry(2, BackoffMs = 30_000)]` sits at the top of `AppFixture.cs` to survive transient failures at the external IdP's login page.
+- **Global retry policy.** `[assembly: Retry(2, BackoffMs = 30_000)]` sits at the top of `AppFixture.cs` to survive transient failures at the external IdP's login page. Retries are silent and the TUnit report only keeps the passing attempt, so a flaky test can look green: after a run, check `TestResults/*.tunit-report.json` for `"retryAttempt"` greater than 0, and to see the real failure temporarily set `Retry(0)`.
 - **Browser parallelism** is capped at 3 (`BrowserParallelLimit` + `[ParallelLimiter<BrowserParallelLimit>]` on `WebAppTests`) because each test is a Chromium instance on top of the whole Aspire app.
 - **Non-deterministic assertions.** Chat-driven tests assert on LLM output (e.g. `ToContainTextAsync("successfully")`) and need an OpenAI key; treat them as inherently softer assertions.
 

@@ -19,4 +19,7 @@ public interface ICarvedRockRepository
 
     Task<Order> CreateOrderAsync(Order order);
     Task<List<Order>> GetOrdersForUserAsync(string userId);
+    Task<Order?> GetOrderAsync(int id);
+    Task<List<Order>> GetAllOrdersAsync();
+    Task UpdateOrderAsync(Order order);
 }

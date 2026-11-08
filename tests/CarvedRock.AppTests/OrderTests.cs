@@ -48,7 +48,7 @@ public class OrderTests(AppFixture fixture)
         // check order records in database (order and details)
         var connStr = await fixture.App.GetConnectionStringAsync("CarvedRockPostgres");
         var options = new DbContextOptionsBuilder<LocalContext>()
-                            .UseNpgsql(connStr)
+                            .UseCarvedRockNpgsql(connStr)
                             .Options;
         await using var context = new LocalContext(options);
 

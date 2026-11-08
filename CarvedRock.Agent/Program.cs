@@ -20,7 +20,9 @@ builder.AddOpenAIClient("kyt-OpenAI", configureSettings: settings =>
 }).AddChatClient(builder.Configuration.GetValue<string>("AIConnection:OpenAIModel"));
 
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IMcpClientProvider, McpClientProvider>();
 builder.Services.AddScoped<Agent>();
+builder.Services.AddScoped<ProductDescriber>();
 
 var authority = builder.Configuration.GetValue<string>("Auth:Authority");
 JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
@@ -74,10 +76,42 @@ app.UseAuthorization();
 app.MapPost("/agent", (AgentChatRequest request, Agent agent, CancellationToken cancellationToken) =>
     agent.GetAgentResponse(request.Message, request.History, cancellationToken));
 
+// Non-streaming variant: same request, same auth as /agent, but the response includes the
+// tool calls the agent made, token usage, elapsed time, and the prompt version.
+app.MapPost("/agent/run", async (AgentChatRequest request, Agent agent, CancellationToken cancellationToken) =>
+    AgentRunMapper.ToResponse(await agent.RunAsync(request.Message, request.History, cancellationToken)));
+
+// Generative (non-agentic) feature: no tools, no conversation - drafts a catalog description from a
+// few product facts. Admin only (anonymous callers get 401, customers 403). The request is checked
+// before the model is called; the draft comes back as the model wrote it, with any rule violations
+// listed rather than silently fixed.
+app.MapPost("/agent/describe", async (DescribeProductRequest request, ProductDescriber describer,
+        CancellationToken cancellationToken) =>
+    {
+        var errors = request.Validate();
+        if (errors.Count > 0) return Results.ValidationProblem(errors);
+
+        try
+        {
+            return Results.Ok(await describer.DescribeAsync(request, cancellationToken));
+        }
+        catch (ProductDescriptionUnavailableException ex)
+        {
+            return Results.Problem(title: "A product description could not be drafted",
+                detail: ex.Message, statusCode: StatusCodes.Status502BadGateway);
+        }
+    })
+    .RequireAuthorization(policy => policy.RequireRole("admin"));
+
 app.Run();
 
 static void CustomizeProblemDetails(ProblemDetailsContext context)
 {
-    context.ProblemDetails.Detail = "Provide the instance value when contacting us for support";
+    // Server errors always get the generic message (don't leak internals); for other statuses keep a
+    // detail the endpoint set deliberately.
+    if (context.ProblemDetails.Status >= 500 || string.IsNullOrEmpty(context.ProblemDetails.Detail))
+    {
+        context.ProblemDetails.Detail = "Provide the instance value when contacting us for support";
+    }
     context.ProblemDetails.Instance = Activity.Current?.RootId;
 }
