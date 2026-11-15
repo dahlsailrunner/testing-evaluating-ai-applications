@@ -53,7 +53,7 @@ the results and coverage, run the following commands:
 ```bash
 # this first command will install the version of chromium used by playrwright
 # during the tests
-pwsh tests/CarvedRock.AppTests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium
+pwsh tests/CarvedRock.AppTests/bin/Debug/net11.0/playwright.ps1 install --with-deps chromium
 
 ./test-with-coverage.ps1 -ShowReports
 ```
@@ -61,7 +61,7 @@ pwsh tests/CarvedRock.AppTests/bin/Debug/net10.0/playwright.ps1 install --with-d
 When this completes, a single aggregated TUnit report (covering the unit, API and
 app tests) will open in the browser, as well as a code coverage report.
 
-Also, the `tests/CarvedRock.AppTests/bin/Debug/Net10.0/playwright-artifacts` folder
+Also, the `tests/CarvedRock.AppTests/bin/Debug/net11.0/playwright-artifacts` folder
 will have a screenshot and some videos that were captured during Playwright tests.
 
 ## Application Features

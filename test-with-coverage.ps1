@@ -2,7 +2,7 @@ param(
     [switch]$ShowReports
 )
 
-Remove-Item -Recurse -Force -ErrorAction SilentlyContinue TestResults, coveragereport, "tests/CarvedRock.AppTests/bin/Debug/Net10.0/playwright-artifacts"
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue TestResults, coveragereport, "tests/CarvedRock.AppTests/bin/Debug/net11.0/playwright-artifacts"
 
 # TUnit report aggregation (https://tunit.dev/docs/guides/report-aggregation):
 # outside GitHub Actions there is no shared directory by default, so point every

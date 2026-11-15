@@ -2,6 +2,7 @@ using System.Net.Mail;
 using System.Text;
 using CarvedRock.Data.Entities;
 using CarvedRock.Domain;
+using MailKit;
 using MailKit.Client;
 using MimeKit;
 

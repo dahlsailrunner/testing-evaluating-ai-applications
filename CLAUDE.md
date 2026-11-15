@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A demo/teaching repo for **automated testing strategies in ASP.NET Core 10**. The "CarvedRock Fitness" app is real and working, but the point of the repo is the *test* projects and the different techniques each one demonstrates. When adding code, keep the testing story intact and readable — comments in test utility classes explain *why* a technique was chosen and are part of the deliverable.
+A demo/teaching repo for **automated testing strategies in ASP.NET Core 11**. The "CarvedRock Fitness" app is real and working, but the point of the repo is the *test* projects and the different techniques each one demonstrates. When adding code, keep the testing story intact and readable — comments in test utility classes explain *why* a technique was chosen and are part of the deliverable.
 
 `readme.md` contains a list of deliberately-omitted tests under "Additional Tests to Create" — these are exercises left for readers, so don't add them unprompted.
 
@@ -40,8 +40,8 @@ project, guid-named: `TestResults/*.cobertura.xml` (the guid doesn't identify
 the project — open the file or use the rollup below instead of grepping these directly).
 
 TUnit test reports are created in the `TestResults` folder, one JSON + one HTML
-per project, named `<ProjectName>-<os>-net10.0.tunit-report.json` /
-`-report.html` (e.g. `CarvedRock.ApiTests-windows-net10.0.tunit-report.json`) —
+per project, named `<ProjectName>-<os>-net11.0.tunit-report.json` /
+`-report.html` (e.g. `CarvedRock.ApiTests-windows-net11.0.tunit-report.json`) —
 glob as `TestResults/*.tunit-report.json` for the machine-readable results.
 
 `test-with-coverage.ps1` runs `reportgenerator` with `Html;TextSummary`,
@@ -51,7 +51,7 @@ HTML report; fall back to the XML only when line-level detail is needed.
 
 Coverage reporting needs `dotnet tool install -g dotnet-reportgenerator-globaltool`. Exclusions (auto-properties, EF migrations, Mapperly output, model/entity files, MailKit.Client) live in `testconfig.json`.
 
-Playwright browsers: `pwsh tests/CarvedRock.AppTests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium`.
+Playwright browsers: `pwsh tests/CarvedRock.AppTests/bin/Debug/net11.0/playwright.ps1 install --with-deps chromium`.
 
 ## Architecture
 
@@ -113,7 +113,7 @@ They are separate projects **because top-level statements make `Program` ambiguo
 - Real access tokens are fetched from the Duende demo server via client credentials (`GetAdminApiClient`, `GetCustomerApiClient`, `GetAdminMcpClient`, `GetCustomerMcpClient`).
 - `AppFixture.cs` re-declares `Product`/`NewProductModel` as local records **on purpose** — the tests assert against a documented contract rather than the app's own types.
 - `CustomPageTest : PageTest` is the Playwright base: `IgnoreHTTPSErrors` (Linux CI dev-certs), page-failure event capture, and `page.Login(user, pass)`.
-- `[RecordVideo]` is a custom attribute that flags a test via TUnit's `StateBag` (through `ITestDiscoveryEventReceiver`, so no reflection); `CustomPageTest` turns that into `RecordVideoDir` and renames the `.webm` files to test names at `[After(TestSession)]`. Artifacts land in `bin/<config>/net10.0/playwright-artifacts/`.
+- `[RecordVideo]` is a custom attribute that flags a test via TUnit's `StateBag` (through `ITestDiscoveryEventReceiver`, so no reflection); `CustomPageTest` turns that into `RecordVideoDir` and renames the `.webm` files to test names at `[After(TestSession)]`. Artifacts land in `bin/<config>/net11.0/playwright-artifacts/`.
 
 ### Gotchas in AppTests
 
