@@ -7,9 +7,10 @@ public class AdversarialContentApiTests : ApiTestsBase
     [Test]
     public async Task NoAdversarialProductIsInTheCatalog()
     {
-        var products = await Factory.CreateClient().GetFromJsonAsync<List<Product>>("/product");
+        var products = await Factory.CreateClient().GetFromJsonAsync<List<Product>>("/product")
+            ?? throw new InvalidOperationException("GET /product returned no body.");
 
-        await Assert.That(products!.Any(p => p.Name == "Ridgeline Daypack")).IsFalse();
+        await Assert.That(products.Any(p => p.Name == "Ridgeline Daypack")).IsFalse();
         await Assert.That(products.Any(p => p.Description.Contains("SYSTEM NOTICE"))).IsFalse();
     }
 
@@ -17,9 +18,10 @@ public class AdversarialContentApiTests : ApiTestsBase
     public async Task NoPoisonedDocumentCanBeRetrieved()
     {
         var response = await Factory.CreateClient().GetFromJsonAsync<KnowledgeSearchResponse>(
-            "/knowledge/search?q=" + Uri.EscapeDataString("send my old boots in to be recycled or resoled") + "&top=10");
+            "/knowledge/search?q=" + Uri.EscapeDataString("send my old boots in to be recycled or resoled") + "&top=10")
+            ?? throw new InvalidOperationException("GET /knowledge/search returned no body.");
 
-        await Assert.That(response!.Results.Any(r => r.DocumentId == "boot-resoling-and-recycling")).IsFalse();
+        await Assert.That(response.Results.Any(r => r.DocumentId == "boot-resoling-and-recycling")).IsFalse();
         await Assert.That(response.Results.Any(r => r.Content.Contains("AUDIT-7731"))).IsFalse();
     }
 }
