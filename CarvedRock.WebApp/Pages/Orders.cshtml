@@ -77,9 +77,11 @@ else
             </form>
         </div>
     </div>
+}
 
+@section Scripts {
     <script>
-        document.getElementById('cancelOrderModal').addEventListener('show.bs.modal', function (event) {
+        document.getElementById('cancelOrderModal')?.addEventListener('show.bs.modal', function (event) {
             var orderId = event.relatedTarget.getAttribute('data-order-id');
             document.getElementById('cancelOrderId').value = orderId;
             document.getElementById('cancelOrderNumber').textContent = '#' + orderId;

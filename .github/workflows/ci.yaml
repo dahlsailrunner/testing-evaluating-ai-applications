@@ -17,13 +17,13 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.x
+          dotnet-version: 11.x
 
       - name: Build & Install
         run: dotnet build --configuration Release
 
       - name: Ensure browsers are installed
-        run: pwsh tests/CarvedRock.AppTests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+        run: pwsh tests/CarvedRock.AppTests/bin/Release/net11.0/playwright.ps1 install --with-deps chromium
 
       - name: Clear any existing dev certs
         run: dotnet dev-certs https --clean
@@ -64,7 +64,7 @@ jobs:
           mkdir -p combined-report/coverage combined-report/merged-report combined-report/playwright
           cp -r coveragereport/. combined-report/coverage/ 2>/dev/null || true
           cp -r ${{ runner.temp }}/tunit-aggregate/**/merged-report.html combined-report/merged-report/ 2>/dev/null || true
-          cp -r ./tests/CarvedRock.AppTests/bin/Release/net10.0/playwright-artifacts/. combined-report/playwright/ 2>/dev/null || true
+          cp -r ./tests/CarvedRock.AppTests/bin/Release/net11.0/playwright-artifacts/. combined-report/playwright/ 2>/dev/null || true
 
       - name: Upload combined test artifacts
         if: always()
