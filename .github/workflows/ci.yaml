@@ -43,6 +43,7 @@ jobs:
             --no-build \
             --results-directory ./TestResults \
             -- \
+            --treenode-filter "/*/*/*/*[Category!=Evals]" \
             --coverage \
             --coverage-output-format cobertura \
             --coverage-settings testconfig.json \

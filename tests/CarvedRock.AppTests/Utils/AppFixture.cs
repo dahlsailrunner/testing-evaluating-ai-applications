@@ -13,6 +13,10 @@ public class AppFixture : AspireFixture<CarvedRock_AppHost>
 {
     protected override TimeSpan ResourceTimeout => TimeSpan.FromMinutes(3);
 
+    // The MCP Inspector is a developer tool for poking at the MCP server by hand. No test uses it, so
+    // leave it out rather than start it, and wait on it, for every test run.
+    protected override IEnumerable<string> ResourcesToRemove() => ["mcp-inspector"];
+
     public LocalContext TestDbContext { get; private set; } = null!;
 
     public List<Product> InitialProducts { get; private set; } = null!;
