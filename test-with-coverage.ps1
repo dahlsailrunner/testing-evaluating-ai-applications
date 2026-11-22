@@ -1,5 +1,6 @@
 param(
-    [switch]$ShowReports
+    [switch]$ShowReports,
+    [switch]$IncludeEvals   # also run the (slow, paid, LLM-judged) eval project and build its report
 )
 
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue TestResults, coveragereport, "tests/CarvedRock.AppTests/bin/Debug/net11.0/playwright-artifacts"
@@ -11,9 +12,23 @@ Remove-Item -Recurse -Force -ErrorAction SilentlyContinue TestResults, coverager
 $aggregateDir = Join-Path $PSScriptRoot "TestResults/aggregate"
 $env:TUNIT_AGGREGATE_DIR = $aggregateDir
 
-dotnet test --coverage --coverage-output-format cobertura --coverage-settings testconfig.json
+# The eval tests are slow, cost money (LLM judge calls) and aren't deterministic, so a normal run leaves
+# them out. They're tagged [Category("Evals")]; this filter excludes that tag from every project
+# (dotnet test --project can't take several projects, so a filter is how a single command skips one).
+$filter = @()
+if (-not $IncludeEvals) {
+    $filter = @("--treenode-filter", "/*/*/*/*[Category!=Evals]")
+}
+
+dotnet test @filter --coverage --coverage-output-format cobertura --coverage-settings testconfig.json
 
 reportgenerator -reports:TestResults/*.cobertura.xml -targetdir:coveragereport -reporttypes:"Html;TextSummary;"
+
+if ($IncludeEvals) {
+    # The evals already ran above, so only build the report (and open it with -ShowReports).
+    # EvalResults/ is not cleaned at the top of this script: eval history is kept between runs.
+    & (Join-Path $PSScriptRoot "eval-report.ps1") -Show:$ShowReports
+}
 
 if ($ShowReports) {
     Invoke-Item ./coveragereport/index.html

@@ -7,11 +7,11 @@ namespace CarvedRock.Agent;
 /// returned on every run result and set as an activity tag, so a result (or a trace)
 /// can always be tied back to the exact prompt that produced it. Bump the version
 /// whenever the prompt text changes, so baselines keyed on it stay meaningful.
+/// The customer prompt's versions live in <see cref="PromptCatalog"/>; <see cref="Customer"/> below is
+/// the text of its first entry (customer-3). The admin and describe prompts are versioned here.
 /// </summary>
 public static class AgentPrompts
 {
-    public const string CustomerVersion = "customer-3";
-
     // The admin prompt text lives in the MCP server (CarvedRock.Mcp/AdminPrompt.cs),
     // so its version is tracked here: bump AdminVersion when that prompt changes.
     public const string AdminVersion = "admin-2";

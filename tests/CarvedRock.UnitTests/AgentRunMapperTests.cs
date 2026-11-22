@@ -8,7 +8,7 @@ public class AgentRunMapperTests
 {
     private static AgentRunResult RunWith(IEnumerable<ChatMessage> messages, UsageDetails? usage = null) =>
         new("done", [new ChatMessage(ChatRole.User, "hi")], [.. messages], usage,
-            TimeSpan.FromMilliseconds(250), AgentPrompts.CustomerVersion);
+            TimeSpan.FromMilliseconds(250), PromptCatalog.LatestCustomer);
 
     [Test]
     public async Task ToolCallsArePairedWithTheirResultsByCallId()
@@ -72,7 +72,7 @@ public class AgentRunMapperTests
         await Assert.That(result.Usage.OutputTokens).IsEqualTo(30);
         await Assert.That(result.Usage.TotalTokens).IsEqualTo(150);
         await Assert.That(result.ElapsedMs).IsEqualTo(250);
-        await Assert.That(result.PromptVersion).IsEqualTo(AgentPrompts.CustomerVersion);
+        await Assert.That(result.PromptVersion).IsEqualTo(PromptCatalog.LatestCustomer);
         await Assert.That(result.Text).IsEqualTo("done");
     }
 

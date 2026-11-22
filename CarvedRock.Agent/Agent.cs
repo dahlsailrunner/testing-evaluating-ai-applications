@@ -50,7 +50,8 @@ public class Agent(IChatClient chatClient,
             response.Usage, stopwatch.Elapsed, promptVersion);
     }
 
-    // Shared by both run paths so they always use the same tools, prompt, and history handling.
+    // Shared by both run paths so they always use the same tools, prompt, 
+    // and history handling.
     private async Task<(AIAgent Agent, List<ChatMessage> Messages, string PromptVersion)> PrepareAsync(
         string message, List<ChatTurn>? history, CancellationToken cxl)
     {
@@ -67,12 +68,14 @@ public class Agent(IChatClient chatClient,
             name: "CarvedRock Assistant",
             tools: [.. tools]);
 
-        // the agent/MCP server are stateless, so the caller (WebApp) re-sends prior turns
-        // on every request - this is what lets a follow-up like "yes, add it to cart" resolve
-        // against what was actually recommended earlier in the conversation.
+        // the agent/MCP server are stateless, so the caller (WebApp) 
+        // re-sends prior turns on every request - this is what lets 
+        // a follow-up like "yes, add it to cart" resolve against what 
+        // was actually recommended earlier in the conversation.
         var messages = (history ?? [])
             .Select(turn => new ChatMessage(
-                turn.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase) ? ChatRole.Assistant : ChatRole.User,
+                turn.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase) ?
+                                        ChatRole.Assistant : ChatRole.User,
                 turn.Content))
             .Append(new ChatMessage(ChatRole.User, message))
             .ToList();
@@ -81,12 +84,14 @@ public class Agent(IChatClient chatClient,
     }
 
     /// <summary>
-    /// Admin mode is entered by starting a message with <c>/admin</c> (admins only) and stays on for
-    /// the rest of the conversation: the history is checked too, because a destructive action takes
-    /// two turns (request, then confirmation) and the confirmation reply won't repeat the prefix.
+    /// Admin mode is entered by starting a message with <c>/admin</c> (admins 
+    /// only) and stays on for the rest of the conversation: the history 
+    /// is checked too, because a destructive action takes two turns (request, 
+    /// then confirmation) and the confirmation reply won't repeat the prefix.
     /// </summary>
-    public static bool IsAdminModeRequested(string message, IEnumerable<ChatTurn>? history,
-                                            ClaimsPrincipal? user)
+    public static bool IsAdminModeRequested(string message,
+                    IEnumerable<ChatTurn>? history,
+                    ClaimsPrincipal? user)
     {
         if (!(user?.IsInRole("admin") ?? false)) return false;
 
@@ -98,8 +103,9 @@ public class Agent(IChatClient chatClient,
             text.StartsWith("/admin", StringComparison.InvariantCultureIgnoreCase);
     }
 
-    private static async Task<(string Prompt, string Version)> GetPromptAsync(string message,
-        List<ChatTurn>? history, McpClient mcpClient, ClaimsPrincipal? user, CancellationToken cxl)
+    private static async Task<(string Prompt, string Version)>
+            GetPromptAsync(string message, List<ChatTurn>? history,
+                    McpClient mcpClient, ClaimsPrincipal? user, CancellationToken cxl)
     {
         if (IsAdminModeRequested(message, history, user))
         {
@@ -112,6 +118,8 @@ public class Agent(IChatClient chatClient,
             return (adminPrompt.ToString(), AgentPrompts.AdminVersion);
         }
 
-        return (AgentPrompts.Customer, AgentPrompts.CustomerVersion);
+        // weaker: GetCustomerPrompt("customer-3-weak")
+        var customerPrompt = PromptCatalog.GetCustomerPrompt();
+        return (customerPrompt.Text, customerPrompt.Id);
     }
 }

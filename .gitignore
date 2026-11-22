@@ -7,4 +7,5 @@ obj/
 aspire-output/
 TestResults/
 coveragereport/
+EvalResults/
 tests/PerformanceTests/reports/
