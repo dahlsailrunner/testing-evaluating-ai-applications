@@ -29,7 +29,7 @@ var adversarialParam = builder.AddParameter("includeAdversarialContent",
                      "for normal use.",
                 enableMarkdown: true);
 
-var api = builder.AddProject<Projects.CarvedRock_Api>("api")
+var api = builder.AddDotnetProject("api", "../CarvedRock.Api/CarvedRock.Api.csproj")
     .WithEnvironment("AIConnection__OpenAIKey", openAiKeyParam)
     .WithEnvironment("Seed__IncludeAdversarialContent", adversarialParam)
     .WithUrlForEndpoint("https", url => url.DisplayText = "API Scalar")
@@ -51,20 +51,20 @@ var api = builder.AddProject<Projects.CarvedRock_Api>("api")
             IsHighlighted = true
         });
 
-var mcp = builder.AddProject<Projects.CarvedRock_Mcp>("mcp")
+var mcp = builder.AddDotnetProject("mcp", "../CarvedRock.Mcp/CarvedRock.Mcp.csproj")
     .WithUrlForEndpoint("https", u => u.DisplayLocation = UrlDisplayLocation.DetailsOnly)
     .WithHttpHealthCheck("/alive")
     .WithReference(api)
     .WaitFor(api);
 
-var agent = builder.AddProject<Projects.CarvedRock_Agent>("agent")
+var agent = builder.AddDotnetProject("agent", "../CarvedRock.Agent/CarvedRock.Agent.csproj")
     .WithHttpHealthCheck("/alive")
     .WithUrlForEndpoint("https", u => u.DisplayText = "Agent Scalar")
     .WithEnvironment("AIConnection__OpenAIKey", openAiKeyParam)
     .WithReference(mcp)
     .WaitFor(mcp);
 
-var webapp = builder.AddProject<Projects.CarvedRock_WebApp>("webapp")
+var webapp = builder.AddDotnetProject("webapp", "../CarvedRock.WebApp/CarvedRock.WebApp.csproj")
     .WithUrlForEndpoint("https", u => u.DisplayText = "Web App")
     .WithHttpHealthCheck("/alive")
     .WithReference(api)
